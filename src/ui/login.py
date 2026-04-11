@@ -14,6 +14,7 @@ class LoginWindow(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.setup_ui()
+        self.bind("<Return>", lambda event: self.login_check())
 
     def setup_ui(self):
         self.login_frame = ctk.CTkFrame(self, width=400, height=500, corner_radius=20)
@@ -27,6 +28,7 @@ class LoginWindow(ctk.CTk):
 
         self.entry_user = ctk.CTkEntry(self.login_frame, placeholder_text="Usuário", width=300, height=45)
         self.entry_user.place(relx=0.5, rely=0.45, anchor="center")
+        self.entry_user.focus_set()
 
         self.entry_pass = ctk.CTkEntry(self.login_frame, placeholder_text="Senha", show="*", width=300, height=45)
         self.entry_pass.place(relx=0.5, rely=0.6, anchor="center")
@@ -42,6 +44,7 @@ class LoginWindow(ctk.CTk):
             command=self.login_check
         )
         self.btn_login.place(relx=0.5, rely=0.8, anchor="center")
+        
     
     def login_check(self):
         user = self.entry_user.get()
