@@ -17,6 +17,10 @@ class MainWindow(ctk.CTk):
         self.sidebar.grid_propagate(False)
         
         ctk.CTkLabel(self.sidebar, text="💧 SGE Manager", font=("Arial", 22, "bold")).pack(pady=30)
+
+        self.btn_prod = ctk.CTkButton(self.sidebar, text="📦 Produtos", command=self.mostrar_produtos)
+        self.btn_prod.pack(pady=10, padx=20, fill="x")
+
         
         self.btn_prod = ctk.CTkButton(self.sidebar, text="📦 Produtos", command=self.mostrar_produtos)
         self.btn_prod.pack(pady=10, padx=20, fill="x")

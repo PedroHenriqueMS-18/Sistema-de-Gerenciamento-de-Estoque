@@ -15,6 +15,7 @@ class LoginWindow(ctk.CTk):
 
         self.setup_ui()
         self.bind("<Return>", lambda event: self.login_check())
+        self.entry_user.focus_set()
 
     def setup_ui(self):
         self.login_frame = ctk.CTkFrame(self, width=400, height=500, corner_radius=20)
@@ -28,7 +29,7 @@ class LoginWindow(ctk.CTk):
 
         self.entry_user = ctk.CTkEntry(self.login_frame, placeholder_text="Usuário", width=300, height=45)
         self.entry_user.place(relx=0.5, rely=0.45, anchor="center")
-        self.entry_user.focus_set()
+        
 
         self.entry_pass = ctk.CTkEntry(self.login_frame, placeholder_text="Senha", show="*", width=300, height=45)
         self.entry_pass.place(relx=0.5, rely=0.6, anchor="center")

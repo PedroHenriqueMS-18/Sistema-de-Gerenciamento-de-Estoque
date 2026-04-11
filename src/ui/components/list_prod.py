@@ -35,7 +35,7 @@ class ListProd(ctk.CTkFrame):
             lbl = ctk.CTkLabel(self.tabela_frame, text=col, font=("Arial", 14, "bold"), text_color="gray")
             lbl.grid(row=0, column=i, pady=15, sticky="nsew")
 
-        produtos_exemplo = [(1, "Arroz Tio João", "R$ 30,00", 50), (2, "Feijão Preto", "R$ 9,50", 25)]
+        produtos_exemplo = [(1, "Arroz Tio João", "R$ 30,00", 50), (2, "Feijão Preto", "R$ 9,50", 25), (2, "Feijão Preto", "R$ 9,50", 25), (2, "Feijão Preto", "R$ 9,50", 25), (2, "Feijão Preto", "R$ 9,50", 25)]
 
         for i, (p_id, p_nome, p_preco, p_qtd) in enumerate(produtos_exemplo):
             row_idx = i + 1
