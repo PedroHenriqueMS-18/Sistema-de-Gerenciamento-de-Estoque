@@ -1,6 +1,6 @@
 """ Importação dos elementos dos arquivos usados para compor o sistema """
 from ui.login import LoginWindow
-from ui.main_windows import MainWindow
+from ui.main_window import MainWindow
 from database.connection import Database
 
 """ Instância global do banco de dados para ser compartilhada entre as janelas """

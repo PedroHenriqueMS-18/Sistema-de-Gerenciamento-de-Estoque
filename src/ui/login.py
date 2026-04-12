@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
+from utils.auth import verificar_login
 
 """Classe responsável por gerar e gerenciar a interface gráfica da janela de login."""
 class LoginWindow(ctk.CTk):
@@ -50,11 +51,17 @@ class LoginWindow(ctk.CTk):
         
     """Coleta os dados dos campos e valida as credenciais para autorizar o acesso ao sistema."""
     def login_check(self):
+        """Coleta os dados dos campos e valida as credenciais via banco de dados."""
         user = self.entry_user.get()
         password = self.entry_pass.get()
 
-        if user == "admin" and password == "123":
+        if verificar_login(user, password):
             self.destroy()
             self.on_login_success()
         else:
+            self.entry_user.delete(0, 'end')
+            self.entry_pass.delete(0, 'end')
+            
+            self.entry_user.focus_set()
+            
             messagebox.showerror("Erro de Acesso", "Usuário ou senha incorretos!")
