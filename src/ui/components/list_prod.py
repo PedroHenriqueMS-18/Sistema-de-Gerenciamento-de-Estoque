@@ -14,6 +14,8 @@ class ListProd(ctk.CTkFrame):
         self.configure(fg_color="transparent")
         self.setup_ui()
 
+        self.search_time = None
+
     def setup_ui(self):
         """Responsável pela construção visual da estrutura da tabela."""
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -24,6 +26,28 @@ class ListProd(ctk.CTkFrame):
             font=ctk.CTkFont(family="Arial", size=32, weight="bold")
         )
         self.label_titulo.pack(side="left", anchor="w")
+
+        self.search_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.search_frame.pack(fill="x", padx=30, pady=(0, 10))
+
+        """ Barra para pesquisa de produtos """
+        self.entry_busca = ctk.CTkEntry(
+            self.search_frame, 
+            placeholder_text="Pesquisar produto pelo nome...",
+            width=400,
+            height=35
+        )
+        self.entry_busca.pack(side="left", padx=(0, 10))
+        self.entry_busca.bind("<Return>", lambda event: self.carregar_produtos_bd())
+
+        self.btn_buscar = ctk.CTkButton(
+            self.search_frame, 
+            text="Buscar", 
+            width=80,
+            height=35,
+            command=self.carregar_produtos_bd
+        )
+        self.btn_buscar.pack(side="left", padx=5)
 
         # Container da Tabela com Scroll
         self.tabela_frame = ctk.CTkScrollableFrame(
@@ -36,13 +60,16 @@ class ListProd(ctk.CTkFrame):
         self.carregar_produtos_bd()
 
     def carregar_produtos_bd(self):
-        """Busca os produtos no banco de dados e renderiza cada linha na interface."""
+        """Busca os produtos no banco de dados filtrando pelo nome e renderiza na interface."""
         
         # 1. Limpa a tabela para evitar duplicatas em atualizações
         for child in self.tabela_frame.winfo_children():
             child.destroy()
 
-        # 2. Configura a proporção das 6 colunas (ID, Nome, Preço, Qtd, Categoria, Ações)
+        # 2. Pega o termo de busca da barra de pesquisa
+        termo_busca = self.entry_busca.get().strip()
+
+        # 3. Configura a proporção das 6 colunas
         self.tabela_frame.grid_columnconfigure((0, 2, 3), weight=1, uniform="col")
         self.tabela_frame.grid_columnconfigure((1, 4), weight=3, uniform="col")
         self.tabela_frame.grid_columnconfigure(5, weight=2, uniform="col")
@@ -53,16 +80,25 @@ class ListProd(ctk.CTkFrame):
             lbl = ctk.CTkLabel(self.tabela_frame, text=col, font=("Arial", 14, "bold"), text_color="gray")
             lbl.grid(row=0, column=i, pady=15, sticky="nsew")
 
-        # 3. Conexão e Busca no PostgreSQL
+        # 4. Conexão e Busca no PostgreSQL
         conn = None
         try:
             conn = psycopg2.connect(**DB_CONFIG)
             cur = conn.cursor()
             
-            cur.execute("SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE ORDER BY id DESC")
+            # LÓGICA DE FILTRO: Se houver busca, usa ILIKE. Se não, traz tudo ativo.
+            if termo_busca == "":
+                query = "SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE ORDER BY nome ASC"
+                params = None
+            else:
+                # O % ao redor do termo permite buscar qualquer parte do nome
+                query = "SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE AND nome ILIKE %s ORDER BY nome ASC"
+                params = (f"%{termo_busca}%",)
+
+            cur.execute(query, params)
             produtos_reais = cur.fetchall()
 
-            # 4. Loop para criar as linhas da tabela
+            # 5. Loop para criar as linhas da tabela
             for i, (p_id, p_nome, p_preco, p_qtd, p_cat) in enumerate(produtos_reais):
                 dados_p = {"id": p_id, "nome": p_nome, "preco": p_preco, "qtd": p_qtd, "categoria": p_cat}
                 
@@ -87,11 +123,9 @@ class ListProd(ctk.CTkFrame):
                 btn_container = ctk.CTkFrame(actions_frame, fg_color="transparent")
                 btn_container.pack(expand=True)
                 
-                # Botão Editar
                 ctk.CTkButton(btn_container, text="Editar", width=40, cursor="hand2", 
                              command=lambda p=dados_p: self.abrir_edicao(p)).pack(side="left", padx=2)
                 
-                # Botão Deletar
                 ctk.CTkButton(btn_container, text="Deletar", width=40, fg_color="#e74c3c", 
                              hover_color="#c0392b", cursor="hand2",
                              command=lambda id_p=p_id: self.deletar_produto(id_p)).pack(side="left", padx=2)
