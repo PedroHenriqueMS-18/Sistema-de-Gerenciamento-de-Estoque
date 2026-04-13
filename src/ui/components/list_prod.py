@@ -44,7 +44,7 @@ class ListProd(ctk.CTkFrame):
 
         # 2. Configura a proporção das 6 colunas (ID, Nome, Preço, Qtd, Categoria, Ações)
         self.tabela_frame.grid_columnconfigure((0, 2, 3), weight=1, uniform="col")
-        self.tabela_frame.grid_columnconfigure((1, 4), weight=3, uniform="col") # Nome e Cat com mais espaço
+        self.tabela_frame.grid_columnconfigure((1, 4), weight=3, uniform="col")
         self.tabela_frame.grid_columnconfigure(5, weight=2, uniform="col")
 
         # Cabeçalho da Tabela
@@ -59,8 +59,7 @@ class ListProd(ctk.CTkFrame):
             conn = psycopg2.connect(**DB_CONFIG)
             cur = conn.cursor()
             
-            # Buscamos a categoria para preencher a nova coluna
-            cur.execute("SELECT id, nome, preco, quantidade, categoria FROM produtos ORDER BY id DESC")
+            cur.execute("SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE ORDER BY id DESC")
             produtos_reais = cur.fetchall()
 
             # 4. Loop para criar as linhas da tabela
@@ -70,23 +69,19 @@ class ListProd(ctk.CTkFrame):
                 row_idx = i + 1
                 cor_fundo = "#333333" if row_idx % 2 == 0 else "transparent" 
                 
-                # Frame que agrupa a linha inteira para efeito de zebra
                 row_frame = ctk.CTkFrame(self.tabela_frame, fg_color=cor_fundo, corner_radius=0)
                 row_frame.grid(row=row_idx, column=0, columnspan=6, sticky="ew")
                 
-                # Alinhamento interno da linha (deve bater com o cabeçalho)
                 row_frame.grid_columnconfigure((0, 2, 3), weight=1, uniform="col")
                 row_frame.grid_columnconfigure((1, 4), weight=3, uniform="col")
                 row_frame.grid_columnconfigure(5, weight=2, uniform="col")
 
-                # Renderização das células de dados
                 ctk.CTkLabel(row_frame, text=str(p_id)).grid(row=0, column=0, pady=10)
                 ctk.CTkLabel(row_frame, text=p_nome, anchor="w").grid(row=0, column=1, pady=10, padx=20, sticky="w")
                 ctk.CTkLabel(row_frame, text=f"R$ {p_preco:.2f}".replace('.', ',')).grid(row=0, column=2, pady=10)
                 ctk.CTkLabel(row_frame, text=str(p_qtd)).grid(row=0, column=3, pady=10)
                 ctk.CTkLabel(row_frame, text=p_cat).grid(row=0, column=4, pady=10)
                 
-                # Frame de botões de ação
                 actions_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
                 actions_frame.grid(row=0, column=5, sticky="nsew")
                 btn_container = ctk.CTkFrame(actions_frame, fg_color="transparent")
@@ -109,7 +104,6 @@ class ListProd(ctk.CTkFrame):
                 conn.close()
 
     def abrir_edicao(self, produto):
-        """Instancia o modal de edição passando os dados da linha selecionada."""
         self.modal = EditModal(
             master=self.winfo_toplevel(), 
             produto_data=produto, 
@@ -117,52 +111,72 @@ class ListProd(ctk.CTkFrame):
         )
 
     def salvar_edicao_banco(self, novos_dados):
-        """
-        Recebe os dados atualizados do modal e grava no PostgreSQL.
-        novos_dados deve ser um dicionário vindo do EditModal.
-        """
         conn = None
         try:
-            # 1. Conecta ao banco
             conn = psycopg2.connect(**DB_CONFIG)
             cur = conn.cursor()
 
-            # 2. Prepara a Query de Update
-            # Usamos o WHERE id para garantir que só esse produto seja alterado
             query = """
                 UPDATE produtos 
                 SET nome = %s, preco = %s, quantidade = %s, categoria = %s 
                 WHERE id = %s
             """
             
-            # 3. Organiza os valores (convertendo para os tipos corretos)
             valores = (
                 novos_dados['nome'],
-                float(str(novos_dados['preco']).replace(',', '.')), # Garante o float com ponto
+                float(str(novos_dados['preco']).replace(',', '.')),
                 int(novos_dados['qtd']),
                 novos_dados['categoria'],
-                novos_dados['id'] # O ID é a nossa chave de segurança
+                novos_dados['id']
             )
 
-            # 4. Executa e Assina (Commit)
             cur.execute(query, valores)
             conn.commit()
             
             cur.close()
             messagebox.showinfo("Sucesso", "Produto atualizado com sucesso!")
-
-            # 5. O SEGREDO: Recarrega a lista para mostrar os dados novos na hora
             self.carregar_produtos_bd()
 
         except Exception as e:
             if conn:
-                conn.rollback() # Se der erro, desfaz a tentativa de alteração
+                conn.rollback()
             messagebox.showerror("Erro", f"Não foi possível atualizar: {e}")
-        
         finally:
             if conn:
                 conn.close()
 
     def deletar_produto(self, id_produto):
-        """Placeholder para a função de deleção de produto."""
-        print(f"Solicitado delete do ID: {id_produto}")
+        """Executa a exclusão do produto no banco de dados após confirmação."""
+        # 1. Janela de confirmação para evitar cliques acidentais
+        confirmacao = messagebox.askyesno(
+            "Confirmar Exclusão", 
+            f"Deseja realmente excluir o produto (ID: {id_produto})?\nEsta ação não pode ser desfeita!"
+        )
+
+        if confirmacao:
+            conn = None
+            try:
+                # 2. Conecta ao PostgreSQL
+                conn = psycopg2.connect(**DB_CONFIG)
+                cur = conn.cursor()
+
+                # 3. Executa o comando DELETE
+                query = "UPDATE produtos SET ativo = FALSE WHERE id = %s"
+                cur.execute(query, (id_produto,))
+
+                # 4. Grava a alteração
+                conn.commit()
+                cur.close()
+
+                messagebox.showinfo("Sucesso", "Produto removido do estoque!")
+
+                # 5. Atualiza a tabela na tela
+                self.carregar_produtos_bd()
+
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                messagebox.showerror("Erro", f"Erro ao tentar deletar o produto: {e}")
+            finally:
+                if conn:
+                    conn.close()

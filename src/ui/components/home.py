@@ -54,7 +54,7 @@ class Home(ctk.CTkFrame):
             cur = conn.cursor()
             
             # Query mágica que conta as linhas da tabela
-            cur.execute("SELECT COUNT(*) FROM produtos")
+            cur.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
             total = cur.fetchone()[0] # Pega o primeiro valor da primeira linha resultante
             
             self.label_valor_prod.configure(text=str(total))
@@ -77,3 +77,5 @@ class Home(ctk.CTkFrame):
         print("Novo produto detectado. Atualizando contador via Banco de Dados...")
         # Em vez de somar manualmente, chamamos a fonte da verdade: o Banco!
         self.carregar_total_produtos()
+
+    
