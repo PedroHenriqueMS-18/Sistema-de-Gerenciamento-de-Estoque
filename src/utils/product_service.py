@@ -2,30 +2,42 @@
 import psycopg2
 from utils.db_config import DB_CONFIG
 
-def buscar_produtos_ativos_db(termo_busca=""):
+def buscar_produtos_ativos_db(termo_busca="", mostrar_tudo=0):
     """Esta função só conversa com o Banco de Dados."""
     conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         
-        if termo_busca == "":
-            query = "SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE ORDER BY nome ASC"
-            params = None
-        else:
-            query = "SELECT id, nome, preco, quantidade, categoria FROM produtos WHERE ativo = TRUE AND nome ILIKE %s ORDER BY nome ASC"
-            params = (f"%{termo_busca}%",)
+        # 1. Base da Query
+        query = "SELECT id, nome, preco, quantidade, categoria, ativo FROM produtos"
+        filtros = []
+        params = []
+
+        # 2. Lógica do Checkbox
+        if not mostrar_tudo:
+            filtros.append("ativo = TRUE")
+
+        # 3. Lógica da Busca
+        if termo_busca:
+            filtros.append("nome ILIKE %s")
+            params.append(f"%{termo_busca}%")
+
+        # 4. Montagem Dinâmica
+        if filtros:
+            # O join transforma a lista em: "filtro1 AND filtro2"
+            query += " WHERE " + " AND ".join(filtros)
+        
+        # 5. Ordenação
+        query += " ORDER BY nome ASC"
 
         cur.execute(query, params)
-        produtos_reais = cur.fetchall() # Aqui estão os dados puros
-        cur.close()
-        return produtos_reais # Retorna a lista de tuplas
+        return cur.fetchall()
     except Exception as e:
-        print(f"Erro no banco: {e}")
+        print(f"Erro ao buscar: {e}")
         return []
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 def inativar_produto_db(id_produto):
     """Executa o Soft Delete no banco de dados."""
@@ -45,6 +57,23 @@ def inativar_produto_db(id_produto):
     finally:
         if conn:
             conn.close()
+
+def reativar_produto_bd(id_produto):
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        query = "UPDATE produtos SET ativo = TRUE WHERE id = %s"
+        cur.execute(query, (id_produto,))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Erro ao reativar: {e}")
+        return False
+    finally:
+        if conn: conn.close()
 
 def atualizar_produto_db(novos_dados):
     """Executa o UPDATE dos dados do produto."""
