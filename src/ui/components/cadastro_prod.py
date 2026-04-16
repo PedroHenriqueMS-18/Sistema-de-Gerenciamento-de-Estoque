@@ -47,6 +47,11 @@ class PopUpCadastro(ctk.CTkToplevel):
         self.label_preco.pack(pady=(5, 0), padx=20, anchor="w")
         self.entry_preco = ctk.CTkEntry(self.frame_esq, width=220, height=40)
         self.entry_preco.pack(pady=(5, 20), padx=20)
+        
+        self.label_ean = ctk.CTkLabel(self.frame_esq, text="Codigo EAN")
+        self.label_ean.pack(pady=(5, 0), padx=20, anchor="w")
+        self.entry_ean = ctk.CTkEntry(self.frame_esq, width=220, height=40)
+        self.entry_ean.pack(pady=(5, 20), padx=20)
 
         # Coluna da Direita
         self.frame_dir = ctk.CTkFrame(self.container, corner_radius=15)
@@ -63,9 +68,9 @@ class PopUpCadastro(ctk.CTkToplevel):
         self.combo_cat.pack(pady=(5, 20), padx=20)
 
         # Botão Salvar (Verde)
-        self.btn_salvar = ctk.CTkButton(self, text="CADASTRAR", fg_color="#27ae60", hover_color="#219150", 
+        self.btn_salvar = ctk.CTkButton(self.frame_dir, text="CADASTRAR", fg_color="#27ae60", hover_color="#219150", width=220,
                                         height=45, font=("Arial", 14, "bold"), command=self.salvar_produto)
-        self.btn_salvar.pack(pady=30, padx=50, fill="x")
+        self.btn_salvar.pack(pady=(40, 20), padx=20, fill="x")
 
     """Coleta os dados inseridos, valida as informações e executa a inserção do produto no banco de dados."""
     def salvar_produto(self):
@@ -74,8 +79,8 @@ class PopUpCadastro(ctk.CTkToplevel):
         preco = self.entry_preco.get()
         qtd = self.entry_qtd.get()
         category = self.combo_cat.get()
-
-        if not nome or not preco or not qtd or not category:
+        codigo_ean = self.entry_ean.get()
+        if not codigo_ean or not nome or not preco or not qtd or not category:
             messagebox.showwarning("Aviso", "Preencha todos os campos!")
             return
 
@@ -92,8 +97,8 @@ class PopUpCadastro(ctk.CTkToplevel):
             conn = psycopg2.connect(**DB_CONFIG)
             cur = conn.cursor()
 
-            query = "INSERT INTO produtos (nome, preco, quantidade, categoria) VALUES (%s, %s, %s, %s)"
-            cur.execute(query, (nome, preco_formatado, qtd_formatada, category))
+            query = "INSERT INTO produtos (nome, preco, quantidade, categoria, cod_ean) VALUES (%s, %s, %s, %s, %s)"
+            cur.execute(query, (nome, preco_formatado, qtd_formatada, category, codigo_ean))
 
             conn.commit()
             cur.close()

@@ -2,7 +2,7 @@
 import psycopg2
 from utils.db_config import DB_CONFIG
 
-def buscar_produtos_ativos_db(termo_busca="", mostrar_tudo=0):
+def buscar_produtos_db(termo_busca="", mostrar_tudo=0):
     """Esta função só conversa com o Banco de Dados."""
     conn = None
     try:
@@ -10,7 +10,7 @@ def buscar_produtos_ativos_db(termo_busca="", mostrar_tudo=0):
         cur = conn.cursor()
         
         # 1. Base da Query
-        query = "SELECT id, nome, preco, quantidade, categoria, ativo FROM produtos"
+        query = "SELECT id, cod_ean, nome, preco, quantidade, categoria, ativo FROM produtos"
         filtros = []
         params = []
 
@@ -84,7 +84,8 @@ def atualizar_produto_db(novos_dados):
 
         query = """
             UPDATE produtos 
-            SET nome = %s, preco = %s, quantidade = %s, categoria = %s 
+            SET nome = %s, preco = %s, quantidade = %s, categoria = %s,
+            cod_ean = %s
             WHERE id = %s
         """
         
@@ -94,6 +95,7 @@ def atualizar_produto_db(novos_dados):
             float(str(novos_dados['preco']).replace(',', '.')),
             int(novos_dados['qtd']),
             novos_dados['categoria'],
+            novos_dados['cod_ean'],
             novos_dados['id']
         )
 
