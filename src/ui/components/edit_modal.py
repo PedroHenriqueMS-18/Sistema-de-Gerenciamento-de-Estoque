@@ -1,90 +1,168 @@
 import customtkinter as ctk
+from tkinter import messagebox
+from utils.product_service import atualizar_produto_db, inativar_produto_db, reativar_produto_bd
 
-class EditModal(ctk.CTkToplevel):
-    """Janela modal para edição de dados de produtos com interface em duas colunas."""
-    
-    def __init__(self, master, produto_data, on_save_callback, **kwargs):
-        super().__init__(master, **kwargs)
+class ProductManagerModal(ctk.CTkToplevel):
+    def __init__(self, master, produto_data, callback_atualizar):
+        super().__init__(master)
+        self.title(f"SGE Manager - {produto_data['nome']}")
+        self.geometry("550x650")
         
-        self.title(f"SGE - Editar Produto (ID: {produto_data['id']})")
-        self.geometry("650x500") # Aumentei um pouco a largura para não esmagar os campos
-        self.after(0, lambda: self.focus_force())
-        self.grab_set()
+        self.produto_original = produto_data
+        self.callback_atualizar = callback_atualizar
+        
+        self.grab_set() 
+        self.setup_ui()
 
-        self.produto_id = produto_data['id']
-        self.on_save = on_save_callback
+    def setup_ui(self):
+        self.grid_columnconfigure(1, weight=1)
+        
+        ctk.CTkLabel(
+            self, text="Gerenciamento de Produto", 
+            font=ctk.CTkFont(family="Arial", size=22, weight="bold")
+        ).grid(row=0, column=0, columnspan=2, pady=25)
 
-        self.setup_ui(produto_data)
+        self.entries = {}
+        campos = [
+            ("ID do Produto", "id"),
+            ("Código EAN", "ean"),
+            ("Nome do Produto", "nome"),
+            ("Preço de Venda", "preco"),
+            ("Quantidade", "qtd"),
+            ("Categoria", "categoria")
+        ]
 
-    def setup_ui(self, data):
-        self.configure(fg_color="#1a1c1e")
+        for i, (label_text, chave) in enumerate(campos):
+            row = i + 1
+            ctk.CTkLabel(self, text=f"{label_text}:", font=("Arial", 13)).grid(row=row, column=0, padx=25, pady=10, sticky="e")
+            
+            entry = ctk.CTkEntry(self, width=280, height=35)
+            
+            # Trata valores None e formata preço
+            raw_val = self.produto_original.get(chave, "")
+            valor = str(raw_val) if raw_val is not None else ""
+            if chave == "preco" and raw_val:
+                try: valor = f"{float(raw_val):.2f}".replace('.', ',')
+                except: pass
+            
+            entry.insert(0, valor)
+            entry.configure(state="disabled", border_color="#3d3d3d")
+            entry.grid(row=row, column=1, padx=25, pady=10, sticky="w")
+            self.entries[chave] = entry
 
-        # Cabeçalho
-        ctk.CTkLabel(self, text=f"Editar Produto", 
-                     font=("Arial", 28, "bold")).pack(pady=(30, 5), padx=40, anchor="w")
-        ctk.CTkLabel(self, text=f"ID do Produto: {self.produto_id}", 
-                     font=("Arial", 14), text_color="gray").pack(pady=(0, 20), padx=40, anchor="w")
+        # --- FRAME DE AÇÕES ---
+        self.actions_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.actions_frame.grid(row=7, column=0, columnspan=2, pady=20)
 
-        # AJUSTE 1: O container agora usa expand=True mas SEM fill="both". 
-        # Isso centraliza o bloco inteiro no meio do espaço restante do modal.
-        self.container = ctk.CTkFrame(self, fg_color="transparent")
-        self.container.pack(expand=True, padx=40, pady=10)
-
-        # Coluna da Esquerda
-        self.col_left = ctk.CTkFrame(self.container, fg_color="#242629", corner_radius=15, border_width=1, border_color="#313437")
-        # AJUSTE 2: Removi o fill="y". Agora o frame cinza só terá a altura dos widgets internos.
-        self.col_left.pack(side="left", fill="both", expand=True, padx=(0, 10), anchor="n") 
-
-        ctk.CTkLabel(self.col_left, text="Nome do Produto", font=("Arial", 12, "bold")).pack(pady=(15, 0), padx=15, anchor="w")
-        self.ent_nome = ctk.CTkEntry(self.col_left, height=40, width=220) # Width fixo para manter padrão
-        self.ent_nome.insert(0, data['nome'])
-        self.ent_nome.pack(padx=15, pady=10)
-
-        ctk.CTkLabel(self.col_left, text="Preço (R$)", font=("Arial", 12, "bold")).pack(pady=(5, 0), padx=15, anchor="w")
-        self.ent_preco = ctk.CTkEntry(self.col_left, height=40, width=220)
-        self.ent_preco.insert(0, str(data['preco']))
-        self.ent_preco.pack(padx=15, pady=10)
-
-        ctk.CTkLabel(self.col_left, text="Código EAN", font=("Arial", 12, "bold")).pack(pady=(5, 0), padx=15, anchor="w")
-        self.ent_ean = ctk.CTkEntry(self.col_left, height=40, width=220)
-        self.ent_ean.insert(0, data.get('cod_ean', '')) 
-        # AJUSTE 3: O último pady define onde o frame cinza acaba.
-        self.ent_ean.pack(padx=15, pady=(0, 30))
-
-        # Coluna da Direita
-        self.col_right = ctk.CTkFrame(self.container, fg_color="#242629", corner_radius=15, border_width=1, border_color="#313437")
-        # AJUSTE 4: Removi o fill="y" aqui também.
-        self.col_right.pack(side="left", fill="both", expand=True, padx=(10, 0), anchor="n")
-
-        ctk.CTkLabel(self.col_right, text="Qtd em Estoque", font=("Arial", 12, "bold")).pack(pady=(15, 0), padx=15, anchor="w")
-        self.ent_qtd = ctk.CTkEntry(self.col_right, height=40, width=220)
-        self.ent_qtd.insert(0, str(data['qtd']))
-        self.ent_qtd.pack(padx=15, pady=10)
-
-        ctk.CTkLabel(self.col_right, text="Categoria", font=("Arial", 12, "bold")).pack(pady=(5, 0), padx=15, anchor="w")
-        self.cat_menu = ctk.CTkOptionMenu(self.col_right, values=["Alimentos", "Bebidas", "Limpeza", "Higiene"], height=40, width=220)
-        self.cat_menu.set(data['categoria'])
-        self.cat_menu.pack(padx=15, pady=10)
-
-        # Botão Atualizar
-        self.btn_atualizar = ctk.CTkButton(
-            self.col_right, 
-            text="SALVAR ALTERAÇÕES", 
-            fg_color="#f39c12", hover_color="#e67e22",
-            font=("Arial", 14, "bold"), height=45, width=220,
-            command=self.salvar_clicado
+        # Botão EDITAR (Único ativo ao abrir)
+        self.btn_editar = ctk.CTkButton(
+            self.actions_frame, text="Habilitar Edição", 
+            fg_color="#3498db", hover_color="#2980b9",
+            text_color_disabled="white", # Mantém o texto visível
+            command=self.solicitar_edicao
         )
-        # AJUSTE 5: Pady final de 20 para fechar o frame igual à coluna da esquerda.
-        self.btn_atualizar.pack(padx=15, pady=(40, 30))
+        self.btn_editar.pack(side="left", padx=10)
 
-    def salvar_clicado(self):
-        novos_dados = {
-            "id": self.produto_id,
-            "nome": self.ent_nome.get(),
-            "preco": self.ent_preco.get(),
-            "qtd": self.ent_qtd.get(),
-            "categoria": self.cat_menu.get(),
-            "cod_ean": self.ent_ean.get()
-        }
-        self.on_save(novos_dados)
-        self.destroy()
+        # Botão SALVAR (Inativo ao abrir)
+        self.btn_salvar = ctk.CTkButton(
+            self.actions_frame, text="Salvar", 
+            fg_color="#2ecc71", hover_color="#27ae60",
+            state="disabled", text_color_disabled="#a0a0a0",
+            command=self.confirmar_salvamento
+        )
+        self.btn_salvar.pack(side="left", padx=10)
+
+        # Botão CANCELAR (Inativo ao abrir - Nome mudado de Sair para Cancelar)
+        self.btn_cancelar = ctk.CTkButton(
+            self.actions_frame, text="Cancelar Edição", 
+            fg_color="#e67e22", hover_color="#d35400",
+            state="disabled", text_color_disabled="#a0a0a0",
+            command=self.resetar_estado_padrao
+        )
+        self.btn_cancelar.pack(side="left", padx=10)
+
+        # --- BOTÃO DE STATUS (Inativo ao abrir) ---
+        if self.produto_original['ativo']:
+            self.btn_status = ctk.CTkButton(
+                self, text="Inativar Produto", 
+                fg_color="#e74c3c", hover_color="#c0392b",
+                state="disabled", text_color_disabled="#a0a0a0",
+                command=self.executar_inativacao
+            )
+        else:
+            self.btn_status = ctk.CTkButton(
+                self, text="Reativar Produto", 
+                fg_color="#27ae60", hover_color="#219150",
+                state="disabled", text_color_disabled="#a0a0a0",
+                command=self.executar_ativacao
+            )
+        self.btn_status.grid(row=8, column=0, columnspan=2, pady=(10, 20))
+
+    def solicitar_edicao(self):
+        """Libera os campos e ativa os botões de ação."""
+        if messagebox.askyesno("SGE Manager", "Deseja habilitar os campos para edição?"):
+            for chave, entry in self.entries.items():
+                if chave != "id":
+                    entry.configure(state="normal", border_color="#3498db", fg_color="#3d3d3d")
+            
+            self.btn_editar.configure(state="disabled", fg_color="#1e3747") # Escurece o botão de editar
+            self.btn_salvar.configure(state="normal")
+            self.btn_cancelar.configure(state="normal")
+            self.btn_status.configure(state="normal")
+
+    def resetar_estado_padrao(self, forcar=False):
+        """Bloqueia tudo e volta ao estado original sem fechar a janela."""
+        
+        # O PULO DO GATO: Se 'forcar' for False, ele checa se deve avisar o usuário.
+        # Se for True (após salvar), ele ignora o aviso e limpa tudo.
+        if not forcar and self.btn_salvar.cget("state") == "normal":
+             if not messagebox.askyesno("Cancelar", "As alterações não salvas serão perdidas. Continuar?"):
+                 return
+
+        # Tranca todos os campos de novo
+        for chave, entry in self.entries.items():
+            entry.configure(state="disabled", border_color="#3d3d3d", fg_color="#2b2b2b")
+        
+        # Restaura os botões para o estado de "apenas leitura"
+        self.btn_editar.configure(state="normal", fg_color="#3498db")
+        self.btn_salvar.configure(state="disabled")
+        self.btn_cancelar.configure(state="disabled")
+        self.btn_status.configure(state="disabled")
+
+    def confirmar_salvamento(self):
+        if messagebox.askyesno("Confirmar", "Deseja salvar as alterações no banco de dados?"):
+            try:
+                novos_dados = {
+                    "id": self.produto_original["id"],
+                    "ean": self.entries["ean"].get(),
+                    "nome": self.entries["nome"].get(),
+                    "preco": float(self.entries["preco"].get().replace(',', '.')),
+                    "qtd": int(self.entries["qtd"].get()),
+                    "categoria": self.entries["categoria"].get()
+                }
+                
+                if atualizar_produto_db(novos_dados):
+                    messagebox.showinfo("Sucesso", "Produto atualizado com sucesso!")
+                    self.callback_atualizar()
+                    
+                    # Atualiza o objeto local para o 'Cancelar' não resetar para o nome antigo
+                    self.produto_original.update(novos_dados)
+                    
+                    # CHAMADA SILENCIOSA: Aqui ele reseta sem perguntar nada
+                    self.resetar_estado_padrao(forcar=True) 
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao processar: {e}")
+
+    def executar_inativacao(self):
+        if messagebox.askyesno("Confirmação", f"Deseja realmente INATIVAR o produto?"):
+            if inativar_produto_db(self.produto_original['id']):
+                messagebox.showinfo("Sucesso", "Produto inativado!")
+                self.callback_atualizar()
+                self.destroy() # Inativar geralmente encerra a gestão rápida do item
+
+    def executar_ativacao(self):
+        if messagebox.askyesno("Confirmação", f"Deseja REATIVAR o produto?"):
+            if reativar_produto_bd(self.produto_original['id']):
+                messagebox.showinfo("Sucesso", "Produto ativado com sucesso!")
+                self.callback_atualizar()
+                self.destroy()

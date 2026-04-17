@@ -1,41 +1,74 @@
 # utils/produto_service.py
 import psycopg2
+import psycopg2.extras
 from utils.db_config import DB_CONFIG
 
 def buscar_produtos_db(termo_busca="", mostrar_tudo=0):
-    """Esta função só conversa com o Banco de Dados."""
+    """Retorna apenas o essencial para a lista principal, mantendo os filtros."""
     conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         
-        # 1. Base da Query
-        query = "SELECT id, cod_ean, nome, preco, quantidade, categoria, ativo FROM produtos"
+        # 1. Base da Query - AGORA SÓ COM 3 COLUNAS
+        # Note que não pedimos 'ativo', 'preco', etc., no SELECT
+        query = "SELECT id, cod_ean, nome FROM produtos"
+        
         filtros = []
         params = []
 
-        # 2. Lógica do Checkbox
+        # 2. Lógica do Checkbox (Filtro de Ativos)
+        # O filtro continua funcionando no WHERE, mesmo que a coluna não esteja no SELECT
         if not mostrar_tudo:
             filtros.append("ativo = TRUE")
 
-        # 3. Lógica da Busca
+        # 3. Lógica da Busca (Nome)
         if termo_busca:
             filtros.append("nome ILIKE %s")
             params.append(f"%{termo_busca}%")
 
         # 4. Montagem Dinâmica
         if filtros:
-            # O join transforma a lista em: "filtro1 AND filtro2"
             query += " WHERE " + " AND ".join(filtros)
         
         # 5. Ordenação
         query += " ORDER BY nome ASC"
 
         cur.execute(query, params)
-        return cur.fetchall()
+        return cur.fetchall() # Retornará apenas tuplas de 3 itens (id, ean, nome)
+        
     except Exception as e:
         print(f"Erro ao buscar: {e}")
         return []
+    finally:
+        if conn: 
+            conn.close()
+
+def buscar_detalhes_produto_por_id(id_produto):
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Mantemos o 'ativo' aqui para o Python saber qual botão desenhar
+        query = """
+            SELECT 
+                id, 
+                cod_ean AS ean, 
+                nome, 
+                preco, 
+                quantidade AS qtd, 
+                categoria, 
+                ativo 
+            FROM produtos 
+            WHERE id = %s
+        """
+        
+        cur.execute(query, (id_produto,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Erro ao buscar detalhes: {e}")
+        return None
     finally:
         if conn: conn.close()
 
@@ -95,7 +128,7 @@ def atualizar_produto_db(novos_dados):
             float(str(novos_dados['preco']).replace(',', '.')),
             int(novos_dados['qtd']),
             novos_dados['categoria'],
-            novos_dados['cod_ean'],
+            novos_dados['ean'],
             novos_dados['id']
         )
 
