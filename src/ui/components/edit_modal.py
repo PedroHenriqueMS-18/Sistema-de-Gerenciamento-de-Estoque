@@ -149,7 +149,7 @@ class ProductManagerModal(ctk.CTkToplevel):
                     self.produto_original.update(novos_dados)
                     
                     # CHAMADA SILENCIOSA: Aqui ele reseta sem perguntar nada
-                    self.resetar_estado_padrao(forcar=True) 
+                    self.resetar_estado_padrao(forcar=True)
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao processar: {e}")
 

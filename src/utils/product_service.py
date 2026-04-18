@@ -3,39 +3,53 @@ import psycopg2
 import psycopg2.extras
 from utils.db_config import DB_CONFIG
 
-def buscar_produtos_db(termo_busca="", mostrar_tudo=0):
-    """Retorna apenas o essencial para a lista principal, mantendo os filtros."""
+def buscar_produtos_db(termo_busca="", mostrar_tudo=0, filtro="Nome"):
+    """Busca produtos baseada no termo, no status e agora no campo selecionado."""
     conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         
-        # 1. Base da Query - AGORA SÓ COM 3 COLUNAS
-        # Note que não pedimos 'ativo', 'preco', etc., no SELECT
         query = "SELECT id, cod_ean, nome FROM produtos"
         
         filtros = []
         params = []
 
-        # 2. Lógica do Checkbox (Filtro de Ativos)
-        # O filtro continua funcionando no WHERE, mesmo que a coluna não esteja no SELECT
+        # 1. Filtro de Ativos (Continua igual)
         if not mostrar_tudo:
             filtros.append("ativo = TRUE")
 
-        # 3. Lógica da Busca (Nome)
+        # 2. Lógica Dinâmica de Busca (Onde a mágica acontece)
         if termo_busca:
-            filtros.append("nome ILIKE %s")
-            params.append(f"%{termo_busca}%")
+            # Mapeamos o texto do OptionMenu para a coluna real do banco
+            mapeamento = {
+                "ID": "id",
+                "Código EAN": "cod_ean",
+                "Nome": "nome"
+            }
+            coluna_selecionada = mapeamento.get(filtro, "nome")
 
-        # 4. Montagem Dinâmica
+            # Se for ID, a busca costuma ser exata (=)
+            if filtro == "ID":
+                if termo_busca.isdigit(): # Só filtra se for número para não quebrar o SQL
+                    filtros.append(f"{coluna_selecionada} = %s")
+                    params.append(int(termo_busca))
+                else:
+                    # Se digitaram letra no ID, forçamos um filtro que não trará nada
+                    filtros.append("id = -1") 
+            else:
+                # Para Nome e EAN, usamos o ILIKE para busca parcial (contém)
+                filtros.append(f"{coluna_selecionada} ILIKE %s")
+                params.append(f"%{termo_busca}%")
+
+        # 3. Montagem Dinâmica
         if filtros:
             query += " WHERE " + " AND ".join(filtros)
         
-        # 5. Ordenação
         query += " ORDER BY nome ASC"
 
         cur.execute(query, params)
-        return cur.fetchall() # Retornará apenas tuplas de 3 itens (id, ean, nome)
+        return cur.fetchall()
         
     except Exception as e:
         print(f"Erro ao buscar: {e}")
