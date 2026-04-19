@@ -1,6 +1,7 @@
 import customtkinter as ctk
-from utils.user_service import buscar_usuarios_db 
+from utils.user_service import buscar_usuarios_db, buscar_usuario_por_id
 from tkinter import messagebox
+
 
 class ListUsers(ctk.CTkFrame):
     def __init__(self, master, **kwargs):
@@ -124,7 +125,23 @@ class ListUsers(ctk.CTkFrame):
         self.tabela_frame.pack(fill="both", expand=True, padx=30, pady=10)
 
     def abrir_cadastro_usuario(self):
-        messagebox.showinfo("SGE", "Abrindo tela de cadastro de novo funcionário...")
+        messagebox.showerror("Erro", "Não foi possivel carregar os detalhes do produto")
 
     def abrir_detalhes_usuario(self, usuario):
-        messagebox.showinfo("SGE", f"Editando funcionário: {usuario['nome']}")
+        from ui.components.user_edit_modal import UserManagerModal
+        from utils.auth import UsuarioSessao
+        try:
+            # 1. Busca os detalhes frescos no banco
+            detalhes = buscar_usuario_por_id(usuario['id']) 
+            
+            # 2. Pega o ID da sessão (Verifique se é .id ou .user_id no seu auth.py)
+            id_sessao = UsuarioSessao.id 
+            
+            if detalhes:
+                # 3. Abre o Modal. Usamos winfo_toplevel() para ele ficar por cima de tudo
+                UserManagerModal(self.winfo_toplevel(), detalhes, self.carregar_usuarios_bd, id_sessao)
+            else:
+                messagebox.showerror("Erro", "Não foi possível carregar os detalhes do funcionário no banco.")
+                
+        except Exception as e:
+            messagebox.showerror("Erro de Execução", f"Ocorreu um erro ao tentar abrir o modal: {e}")

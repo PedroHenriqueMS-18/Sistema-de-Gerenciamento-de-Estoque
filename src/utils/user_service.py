@@ -54,3 +54,47 @@ def buscar_usuarios_db(termo_busca="", mostrar_inativos=0, filtro="Nome"):
         if conn: 
             conn.close()
 
+def buscar_usuario_por_id(user_id):
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        
+        # Selecionamos tudo que o modal precisa
+        query = "SELECT id, nome, usuario, nivel, ativo, cpf FROM login WHERE id = %s"
+        cur.execute(query, (user_id,))
+        row = cur.fetchone()
+        
+        if row:
+            # Transformamos em dicionário para o Modal ler fácil
+            return {
+                "id": row[0],
+                "nome": row[1],
+                "login": row[2],
+                "nivel": row[3],
+                "ativo": row[4],
+                "cpf": row[5]
+            }
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar detalhes: {e}")
+        return None
+    finally:
+        if conn: conn.close()
+
+# No topo do arquivo: from utils.db_config import get_connection (ou como você chama sua conexão)
+
+def atualizar_usuario_db(dados):
+    """Atualiza nome, login e nível do usuário no banco."""
+    # Sua lógica de UPDATE usuarios SET nome=%s, login=%s, nivel=%s WHERE id=%s
+    pass
+
+def inativar_usuario_db(usuario_id):
+    """Muda o status do usuário para inativo (ativo = False)."""
+    # Sua lógica de UPDATE usuarios SET ativo=False WHERE id=%s
+    pass
+
+def reativar_usuario_db(usuario_id):
+    """Muda o status do usuário para ativo (ativo = True)."""
+    # Sua lógica de UPDATE usuarios SET ativo=True WHERE id=%s
+    pass
