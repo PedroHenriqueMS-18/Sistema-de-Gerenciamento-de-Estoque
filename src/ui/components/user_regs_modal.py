@@ -100,7 +100,7 @@ class UserRegisterModal(ctk.CTkToplevel):
 
         # Chamada para o Service
         if cadastrar_usuario_db(dados):
-            messagebox.showinfo("Sucesso", f"Usuário {dados['login']} cadastrado!")
+            messagebox.showinfo("Sucesso", f"Funcionário {dados['nome']} cadastrado!")
             if self.ao_salvar:
                 self.ao_salvar()
 
