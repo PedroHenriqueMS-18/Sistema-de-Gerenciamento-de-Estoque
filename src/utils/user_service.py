@@ -1,5 +1,7 @@
 import psycopg2
 from utils.db_config import DB_CONFIG
+from tkinter import messagebox
+import bcrypt
 
 def buscar_usuarios_db(termo_busca="", mostrar_inativos=0, filtro="Nome"):
     """Busca usuários baseada no termo, no status e no campo selecionado (ID, Nome ou Usuário)."""
@@ -85,16 +87,98 @@ def buscar_usuario_por_id(user_id):
 # No topo do arquivo: from utils.db_config import get_connection (ou como você chama sua conexão)
 
 def atualizar_usuario_db(dados):
-    """Atualiza nome, login e nível do usuário no banco."""
-    # Sua lógica de UPDATE usuarios SET nome=%s, login=%s, nivel=%s WHERE id=%s
-    pass
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        query = "UPDATE login SET nome = %s, usuario = %s, cpf = %s, nivel = %s WHERE id = %s"
+
+        novos_dados = (
+            dados['nome'],
+            dados['login'],
+            dados['cpf'],
+            int(dados['nivel']),
+            int(dados['id'])       
+        )
+
+        cur.execute(query, novos_dados)
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Erro ao atualizar {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
 
 def inativar_usuario_db(usuario_id):
     """Muda o status do usuário para inativo (ativo = False)."""
-    # Sua lógica de UPDATE usuarios SET ativo=False WHERE id=%s
-    pass
+    
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        
+        query = "UPDATE login SET ativo = FALSE WHERE id = %s"
+
+        cur.execute(query, usuario_id)
+        conn.commit()
+        cur.close
+        return True
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Erro ao inativar {e}")
+        return False
+    finally:
+        if conn: conn.close()
 
 def reativar_usuario_db(usuario_id):
     """Muda o status do usuário para ativo (ativo = True)."""
-    # Sua lógica de UPDATE usuarios SET ativo=True WHERE id=%s
-    pass
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        
+        query = "UPDATE login SET ativo = TRUE WHERE id = %s"
+
+        cur.execute(query, (usuario_id,))
+        conn.commit()
+        cur.close
+        return True
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Erro ao inativar {e}")
+        return False
+    finally:
+        if conn: conn.close()
+
+def cadastrar_usuario_db(dados):
+    senha_plana = dados['senha'].encode('utf-8')
+    hash_gerado = bcrypt.hashpw(senha_plana, bcrypt.gensalt())
+
+    conn = None
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+
+        query = "INSERT INTO login (nome, cpf, usuario, nivel, pass) VALUES (%s, %s, %s, %s, %s)"
+        valores = (
+                    dados['nome'],
+                    dados['cpf'],
+                    dados['login'],
+                    dados['nivel'],
+                    hash_gerado.decode('utf-8')
+                )
+        cur.execute(query, valores)
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        messagebox.showerror("Erro", f"Erro no banco: {e}")
+        return False
+    finally:
+        if conn: conn.close()
+    
+

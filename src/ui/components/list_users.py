@@ -125,7 +125,9 @@ class ListUsers(ctk.CTkFrame):
         self.tabela_frame.pack(fill="both", expand=True, padx=30, pady=10)
 
     def abrir_cadastro_usuario(self):
-        messagebox.showerror("Erro", "Não foi possivel carregar os detalhes do produto")
+        from ui.components.user_regs_modal import UserRegisterModal
+
+        UserRegisterModal(master=self.winfo_toplevel(), ao_salvar=self.carregar_usuarios_bd)
 
     def abrir_detalhes_usuario(self, usuario):
         from ui.components.user_edit_modal import UserManagerModal
