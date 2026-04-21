@@ -132,6 +132,7 @@ class ListUsers(ctk.CTkFrame):
     def abrir_detalhes_usuario(self, usuario):
         from ui.components.user_edit_modal import UserManagerModal
         from utils.auth import UsuarioSessao
+
         try:
             # 1. Busca os detalhes frescos no banco
             detalhes = buscar_usuario_por_id(usuario['id']) 

@@ -1,7 +1,9 @@
 import customtkinter as ctk
 import psycopg2
+from utils.auth import UsuarioSessao
 from utils.db_config import DB_CONFIG
 from ui.components.cadastro_prod import PopUpCadastro
+from tkinter import messagebox
 
 class Home(ctk.CTkFrame):
     def __init__(self, master, db_connection=None, funcao_estoque=None, **kwargs):
@@ -42,6 +44,9 @@ class Home(ctk.CTkFrame):
                                          command=self.abrir_popup_cadastro, height=50, font=("Arial", 16, "bold"))
         self.btn_new_prod.pack(side="left", expand=True, padx=(0, 10), fill="x")
 
+        if UsuarioSessao.nivel not in [1, 2]:
+            self.btn_new_prod.configure(state="disabled", fg_color="gray", text="Acesso Restrito")
+
         self.btn_view_estoque = ctk.CTkButton(self.actions_frame, text="VER ESTOQUE ABERTO", fg_color="#3498db", 
                                              command=self.ir_para_estoque, height=50, font=("Arial", 16, "bold"))
         self.btn_view_estoque.pack(side="left", expand=True, padx=(10, 0), fill="x")
@@ -67,10 +72,14 @@ class Home(ctk.CTkFrame):
                 conn.close()
 
     def abrir_popup_cadastro(self):
-        self.popup = PopUpCadastro(
-            master=self.winfo_toplevel(), 
-            ao_salvar=self.atualizar_contador_dashboard
-        )
+        if UsuarioSessao.nivel in [1, 2]:
+            self.popup = PopUpCadastro(
+                master=self.winfo_toplevel(), 
+                ao_salvar=self.atualizar_contador_dashboard
+            )
+        else:
+            messagebox.showwarning("Acesso restrito", "Apenas Administradores ou Operadores podem cadastrar novos produtos.")
+        
 
     def atualizar_contador_dashboard(self):
         """Ação disparada após o cadastro de sucesso no Pop-up."""

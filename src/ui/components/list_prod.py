@@ -103,6 +103,12 @@ class ListProd(ctk.CTkFrame):
         self.tabela_frame.pack(fill="both", expand=True, padx=30, pady=10)
 
     def abrir_gerenciador(self, produto):
+        from utils.auth import UsuarioSessao
+
+        if UsuarioSessao.nivel not in [1, 2]:
+            messagebox.showwarning("Acesso Restrito", f"Somente Administradores e Operadores podem acessar os detalhes dos produtos")
+            return
+
         detalhes = buscar_detalhes_produto_por_id(produto['id'])
         if detalhes:
             ProductManagerModal(self.winfo_toplevel(), detalhes, self.carregar_produtos_bd)
