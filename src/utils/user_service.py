@@ -1,4 +1,5 @@
 import psycopg2
+from utils.logger import registrar_log
 from utils.db_config import DB_CONFIG
 from tkinter import messagebox
 import bcrypt
@@ -91,23 +92,66 @@ def atualizar_usuario_db(dados):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
-        query = "UPDATE login SET nome = %s, usuario = %s, cpf = %s, nivel = %s WHERE id = %s"
 
-        novos_dados = (
+        # 1. BUSCAR DADOS ATUAIS (O "Antes") para comparação
+        # Buscamos as colunas que podem ser alteradas
+        cur.execute("SELECT nome, usuario, cpf, nivel FROM login WHERE id = %s", (dados['id'],))
+        antigo = cur.fetchone()
+
+        if not antigo:
+            return False
+
+        # 2. EXECUTAR O UPDATE
+        query = "UPDATE login SET nome = %s, usuario = %s, cpf = %s, nivel = %s WHERE id = %s"
+        
+        nivel_novo = int(dados['nivel'])
+        id_usuario_alvo = int(dados['id'])
+        
+        novos_valores = (
             dados['nome'],
             dados['login'],
             dados['cpf'],
-            int(dados['nivel']),
-            int(dados['id'])       
+            nivel_novo,
+            id_usuario_alvo
         )
 
-        cur.execute(query, novos_dados)
+        cur.execute(query, novos_valores)
+
+        # 3. COMPARAR AS MUDANÇAS (A "Fofoca" técnica)
+        mudancas = []
+        if antigo[0] != dados['nome']:
+            mudancas.append(f"Nome: '{antigo[0]}' -> '{dados['nome']}'")
+        
+        if antigo[1] != dados['login']:
+            mudancas.append(f"Login: '{antigo[1]}' -> '{dados['login']}'")
+            
+        if antigo[2] != dados['cpf']:
+            mudancas.append(f"CPF: {antigo[2]} -> {dados['cpf']}")
+            
+        if int(antigo[3]) != nivel_novo:
+            mudancas.append(f"Nível: {antigo[3]} -> {nivel_novo}")
+
+        # Se não houver mudanças, avisamos no log
+        detalhes_finais = " | ".join(mudancas) if mudancas else "Dados salvos sem alterações."
+
+        # 4. REGISTRAR O LOG (Importando a sua função genérica)
+        
+        registrar_log(
+            cursor=cur,
+            acao="ALTERAÇÃO DE PERFIL",
+            tabela="login", # Nome da sua tabela de usuários
+            registro_id=id_usuario_alvo,
+            detalhes=detalhes_finais
+        )
+
+        # 5. COMMIT (Salva o UPDATE e o LOG juntos)
         conn.commit()
         cur.close()
         return True
+
     except Exception as e:
         if conn: conn.rollback()
-        print(f"Erro ao atualizar {e}")
+        print(f"Erro ao atualizar e logar usuário: {e}")
         return False
     finally:
         if conn:
@@ -123,7 +167,18 @@ def inativar_usuario_db(usuario_id):
         
         query = "UPDATE login SET ativo = FALSE WHERE id = %s"
 
-        cur.execute(query, usuario_id)
+        cur.execute(query, (usuario_id,))
+
+        detalhe = f"Inativou o produto (ID: {usuario_id})"
+
+        registrar_log(
+            cursor=cur,
+            acao="INATIVAÇÃO",
+            tabela="produtos",
+            registro_id=usuario_id,
+            detalhes=detalhe
+        )
+
         conn.commit()
         cur.close
         return True
@@ -144,6 +199,16 @@ def reativar_usuario_db(usuario_id):
         query = "UPDATE login SET ativo = TRUE WHERE id = %s"
 
         cur.execute(query, (usuario_id,))
+
+        detalhe = f"Reativou o produto (ID: {usuario_id})"
+
+        registrar_log(
+            cursor=cur,
+            acao="REATIVAÇÃO",
+            tabela="produtos",
+            registro_id=usuario_id,
+            detalhes=detalhe
+        )
         conn.commit()
         cur.close
         return True
