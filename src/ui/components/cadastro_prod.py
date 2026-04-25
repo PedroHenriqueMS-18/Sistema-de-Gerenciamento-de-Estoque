@@ -74,12 +74,12 @@ class PopUpCadastro(ctk.CTkToplevel):
 
     """Coleta os dados inseridos, valida as informações e executa a inserção do produto no banco de dados."""
     def salvar_produto(self):
-        # Aqui pegamos os dados e enviamos para o banco (SQL INSERT)
         nome = self.entry_nome.get()
         preco = self.entry_preco.get()
         qtd = self.entry_qtd.get()
         category = self.combo_cat.get()
         codigo_ean = self.entry_ean.get()
+
         if not codigo_ean or not nome or not preco or not qtd or not category:
             messagebox.showwarning("Aviso", "Preencha todos os campos!")
             return
@@ -97,9 +97,32 @@ class PopUpCadastro(ctk.CTkToplevel):
             conn = psycopg2.connect(**DB_CONFIG)
             cur = conn.cursor()
 
-            query = "INSERT INTO produtos (nome, preco, quantidade, categoria, cod_ean) VALUES (%s, %s, %s, %s, %s)"
+            # 1. Inserimos o produto e pedimos o ID de volta (RETURNING id)
+            query = """
+                INSERT INTO produtos (nome, preco, quantidade, categoria, cod_ean) 
+                VALUES (%s, %s, %s, %s, %s) RETURNING id
+            """
             cur.execute(query, (nome, preco_formatado, qtd_formatada, category, codigo_ean))
+            
+            # Pegamos o ID gerado
+            novo_id = cur.fetchone()[0]
 
+            # 2. Preparamos o log
+            from utils.logger import registrar_log
+            from utils.auth import UsuarioSessao # Para pegar o nome de quem está logado
+
+            detalhe_log = f"O funcionário {UsuarioSessao.nome} cadastrou o produto: {nome} | EAN: {codigo_ean} | Estoque inicial: {qtd_formatada}"
+
+            # 3. Chamamos a função de log ANTES do commit
+            registrar_log(
+                cursor=cur,
+                acao="CADASTRO",
+                tabela="produtos",
+                registro_id=novo_id,
+                detalhes=detalhe_log
+            )
+
+            # 4. Agora sim, salvamos tudo de uma vez
             conn.commit()
             cur.close()
 
@@ -110,6 +133,7 @@ class PopUpCadastro(ctk.CTkToplevel):
             self.destroy()
 
         except Exception as e:
+            if conn: conn.rollback() # Segurança: se o log ou o insert falhar, desfaz tudo
             messagebox.showerror("Erro", f"Erro no banco: {e}")
 
         finally:

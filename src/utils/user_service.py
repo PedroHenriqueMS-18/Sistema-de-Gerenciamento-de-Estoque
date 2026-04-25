@@ -220,6 +220,7 @@ def reativar_usuario_db(usuario_id):
         if conn: conn.close()
 
 def cadastrar_usuario_db(dados):
+    # Gerando o hash da senha por segurança
     senha_plana = dados['senha'].encode('utf-8')
     hash_gerado = bcrypt.hashpw(senha_plana, bcrypt.gensalt())
 
@@ -228,19 +229,50 @@ def cadastrar_usuario_db(dados):
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
 
-        query = "INSERT INTO login (nome, cpf, usuario, nivel, pass) VALUES (%s, %s, %s, %s, %s)"
+        # 1. Inserção com RETURNING para pegar o ID gerado pelo Serial
+        query = """
+            INSERT INTO login (nome, cpf, usuario, nivel, pass) 
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """
         valores = (
-                    dados['nome'],
-                    dados['cpf'],
-                    dados['login'],
-                    dados['nivel'],
-                    hash_gerado.decode('utf-8')
-                )
+            dados['nome'],
+            dados['cpf'],
+            dados['login'],
+            dados['nivel'],
+            hash_gerado.decode('utf-8')
+        )
+        
         cur.execute(query, valores)
+        
+        # Pega o ID do usuário que acabou de ser criado
+        novo_usuario_id = cur.fetchone()[0]
+
+        # 2. Preparando os detalhes do log
+        # Mapeamos o nível para ficar legível no log
+        niveis_map = {1: "Administrador", 2: "Operador", 3: "Vendedor"}
+        nivel_nome = niveis_map.get(int(dados['nivel']), "Desconhecido")
+        
+        from utils.auth import UsuarioSessao
+        detalhe_log = (f"O administrador {UsuarioSessao.nome} cadastrou um novo funcionário: "
+                       f"{dados['nome']} | Login: {dados['login']} | Nível: {nivel_nome}")
+
+        # 3. Registrando o Log (Importando a função genérica)
+        from utils.logger import registrar_log
+        registrar_log(
+            cursor=cur,
+            acao="CADASTRO USUÁRIO",
+            tabela="login",
+            registro_id=novo_usuario_id,
+            detalhes=detalhe_log
+        )
+
+        # 4. Commit final: salva o usuário e o log de uma vez só
         conn.commit()
         cur.close()
         return True
+
     except Exception as e:
+        if conn: conn.rollback() # Se algo falhar, não salva nada
         messagebox.showerror("Erro", f"Erro no banco: {e}")
         return False
     finally:
