@@ -4,6 +4,7 @@ from ui.components.list_prod import ListProd
 from ui.components.home import Home
 from utils.auth import UsuarioSessao
 from ui.components.list_users import ListUsers
+from ui.components.list_fornec import ListFornec
 
 """Define a janela principal do sistema, gerenciando a navegação entre diferentes telas e componentes."""
 class MainWindow(ctk.CTk):
@@ -29,6 +30,9 @@ class MainWindow(ctk.CTk):
         self.btn_home.pack(pady=10, padx=20, fill="x")
 
         self.btn_prod = ctk.CTkButton(self.sidebar, text="Estoque", command=self.mostrar_produtos)
+        self.btn_prod.pack(pady=10, padx=20, fill="x")
+
+        self.btn_prod = ctk.CTkButton(self.sidebar, text="Fornecedores", command=self.mostrar_fornec)
         self.btn_prod.pack(pady=10, padx=20, fill="x")
 
         # --- BOTÃO CONDICIONAL: GESTÃO DE USUÁRIOS ---
@@ -118,4 +122,10 @@ class MainWindow(ctk.CTk):
         self.clean_screen()
         self.select_aba(self.btn_users)
         self.tela = ListUsers(master=self.area_principal)
+        self.tela.pack(fill="both", expand=True)
+
+    def mostrar_fornec(self):
+        self.clean_screen()
+        self.select_aba(self.btn_users)
+        self.tela = ListFornec(master=self.area_principal)
         self.tela.pack(fill="both", expand=True)
