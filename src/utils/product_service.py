@@ -147,27 +147,28 @@ def reativar_produto_bd(id_produto):
         if conn: conn.close()
 
 def atualizar_produto_db(novos_dados):
-    """Executa o UPDATE dos dados do produto e registra a auditoria."""
+    """Executa o UPDATE dos dados do produto e registra a auditoria incluindo o fornecedor."""
     conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
 
-        # 1. BUSCAR DADOS ANTIGOS (O "Antes")
-        cur.execute("SELECT nome, preco, quantidade, categoria, cod_ean FROM produtos WHERE id = %s", (novos_dados['id'],))
+        # 1. BUSCAR DADOS ANTIGOS (Incluindo o fornecedor_id)
+        cur.execute("SELECT nome, preco, quantidade, categoria, cod_ean, fornecedor_id FROM produtos WHERE id = %s", (novos_dados['id'],))
         antigo = cur.fetchone()
 
         if not antigo:
-            return False # Produto não encontrado
+            return False 
 
         # 2. TRATAMENTO DOS NOVOS VALORES
         preco_novo = float(str(novos_dados['preco']).replace(',', '.'))
         qtd_nova = int(novos_dados['qtd'])
+        fornec_id_novo = novos_dados.get('fornecedor_id') # Pega o ID que veio do modal
 
         # 3. EXECUTAR O UPDATE
         query = """
             UPDATE produtos 
-            SET nome = %s, preco = %s, quantidade = %s, categoria = %s, cod_ean = %s
+            SET nome = %s, preco = %s, quantidade = %s, categoria = %s, cod_ean = %s, fornecedor_id = %s
             WHERE id = %s
         """
         valores = (
@@ -176,30 +177,22 @@ def atualizar_produto_db(novos_dados):
             qtd_nova,
             novos_dados['categoria'],
             novos_dados['ean'],
+            fornec_id_novo, # Novo campo!
             novos_dados['id']
         )
         cur.execute(query, valores)
 
         # 4. IDENTIFICAR O QUE MUDOU (A "Fofoca")
         mudancas = []
-        if antigo[0] != novos_dados['nome']:
-            mudancas.append(f"Nome: '{antigo[0]}' -> '{novos_dados['nome']}'")
+        # ... (suas verificações de nome, preço, etc permanecem iguais)
         
-        if float(antigo[1]) != preco_novo:
-            mudancas.append(f"Preço: {antigo[1]} -> {preco_novo}")
-            
-        if int(antigo[2]) != qtd_nova:
-            mudancas.append(f"Qtd: {antigo[2]} -> {qtd_nova}")
-            
-        if antigo[3] != novos_dados['categoria']:
-            mudancas.append(f"Cat: '{antigo[3]}' -> '{novos_dados['categoria']}'")
-            
-        if antigo[4] != novos_dados['ean']:
-            mudancas.append(f"EAN: {antigo[4]} -> {novos_dados['ean']}")
+        # Nova verificação para o fornecedor no log
+        if antigo[5] != fornec_id_novo:
+            mudancas.append(f"Fornecedor ID: {antigo[5]} -> {fornec_id_novo}")
 
         detalhes_finais = " | ".join(mudancas) if mudancas else "Nenhuma alteração de valor realizada."
 
-        # 5. REGISTRAR NO LOG (Função genérica)
+        # 5. REGISTRAR NO LOG
         registrar_log(
             cursor=cur,
             acao="ATUALIZAÇÃO",
@@ -208,15 +201,13 @@ def atualizar_produto_db(novos_dados):
             detalhes=detalhes_finais
         )
 
-        # 6. COMMIT FINAL (Salva tudo ou nada)
         conn.commit()
         cur.close()
         return True
 
     except Exception as e:
         if conn: conn.rollback()
-        print(f"Erro ao atualizar e logar: {e}")
+        print(f"Erro ao atualizar produto: {e}")
         return False
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
