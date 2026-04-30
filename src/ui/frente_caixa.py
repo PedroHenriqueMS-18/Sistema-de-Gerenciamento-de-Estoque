@@ -120,9 +120,9 @@ class TelaPDV(ctk.CTkFrame):
             f"{item_num:03d}",
             str(ean),
             str(nome).upper(),
-            f"{qtd:.3f}",
-            f"{valor_unit:.2f}",
-            f"{subtotal:.2f}"
+            f"{qtd:.3f}".replace('.', ','),
+            f"{valor_unit:.2f}".replace('.', ','),
+            f"{subtotal:.2f}".replace('.', ',')
         ]
 
         for i, texto in enumerate(dados):

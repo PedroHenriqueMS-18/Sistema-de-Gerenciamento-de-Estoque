@@ -65,26 +65,35 @@ class MainPDV(ctk.CTk):
 
         if produto:
             id_prod, cod_ean, nome, preco_unit, estoque = produto
+            # Mantemos preco_unit como FLOAT para todas as contas
             preco_unit = float(preco_unit)
 
+            # Cálculo do subtotal (Número * Número = Sucesso)
             subtotal_item = preco_unit * self.quantidade_atual
             
+            # Criamos variáveis de EXIBIÇÃO (apenas para a interface)
+            # Aqui já podemos colocar a vírgula brasileira!
+            preco_unit_exibir = f"{preco_unit:.2f}".replace('.', ',')
+
             # --- ATUALIZAÇÃO DA INTERFACE ---
             self.interface.lbl_foco_produto.configure(text=f"PRODUTO: {nome}")
-            self.interface.lbl_unit_display.configure(text=f"R$ {preco_unit:.2f}")
+            # Usamos a variável de EXIBIÇÃO no label
+            self.interface.lbl_unit_display.configure(text=f"R$ {preco_unit_exibir}")
 
-            # Chama a função visual de adicionar linha
+            # Chama a função visual (Passamos o PREÇO PURO para ela fazer o cálculo lá dentro)
             self.interface.adicionar_linha_produto(
                 item_num=len(self.itens_venda) + 1,
                 ean=cod_ean,
                 nome=nome,
                 qtd=self.quantidade_atual,
-                valor_unit=preco_unit
+                valor_unit=preco_unit # <-- Passa o float aqui!
             )
 
             # Atualiza o acumulador e o label de total
             self.total_venda += subtotal_item
-            self.interface.lbl_total.configure(text=f"TOTAL: R$ {self.total_venda:.2f}")
+            total_texto = f"{self.total_venda:.2f}"
+            total_exibicao = total_texto.replace('.', ',')
+            self.interface.lbl_total.configure(text=f"TOTAL: R$ {total_exibicao}")
 
             # Guarda na lista
             self.itens_venda.append({
