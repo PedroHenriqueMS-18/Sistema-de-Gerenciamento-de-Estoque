@@ -91,15 +91,54 @@ class TelaPDV(ctk.CTkFrame):
 
     def render_table_headers(self):
         headers = ["ÍT.", "CÓDIGO", "DESCRIÇÃO DO PRODUTO", "QTD", "VL. UNIT.", "SUBTOTAL"]
-        weights = [1, 3, 5, 1, 2, 2] 
+        self.table_weights = [1, 3, 5, 1, 2, 2]
         
-        header_row = ctk.CTkFrame(self.table_frame, fg_color="#3d3d3d")
-        header_row.pack(fill="x", pady=2)
+        # Voltamos o master para self.table_frame para ele seguir o mesmo scroll das linhas
+        header_row = ctk.CTkFrame(self.table_frame, fg_color="#3d3d3d", corner_radius=0)
+        header_row.pack(fill="x", side="top", pady=(0, 5))
         
         for i, text in enumerate(headers):
-            lbl = ctk.CTkLabel(header_row, text=text, font=("Arial", 12, "bold"), text_color="gray")
+            lbl = ctk.CTkLabel(
+                header_row, 
+                text=text, 
+                font=("Arial", 12, "bold"), 
+                text_color="gray",
+                anchor="center"
+            )
             lbl.grid(row=0, column=i, sticky="nsew", pady=5)
-            header_row.grid_columnconfigure(i, weight=weights[i])
+            # O segredo do alinhamento vertical é o uniform="column_group"
+            header_row.grid_columnconfigure(i, weight=self.table_weights[i], uniform="column_group")
+            
+    def adicionar_linha_produto(self, item_num, ean, nome, qtd, valor_unit):
+        subtotal = qtd * valor_unit
+        cor_linha = "#333333" if item_num % 2 == 0 else "transparent"
+        
+        row_frame = ctk.CTkFrame(self.table_frame, fg_color=cor_linha, corner_radius=0)
+        row_frame.pack(fill="x", pady=0)
+
+        dados = [
+            f"{item_num:03d}",
+            str(ean),
+            str(nome).upper(),
+            f"{qtd:.3f}",
+            f"{valor_unit:.2f}",
+            f"{subtotal:.2f}"
+        ]
+
+        for i, texto in enumerate(dados):
+            lbl = ctk.CTkLabel(
+                row_frame, 
+                text=texto, 
+                font=("Arial", 14), 
+                text_color="white",
+                anchor="center"
+            )
+            lbl.grid(row=0, column=i, sticky="nsew", pady=8)
+            # IMPORTANTE: O uniform deve ser o mesmo nome usado no header ("column_group")
+            row_frame.grid_columnconfigure(i, weight=self.table_weights[i], uniform="column_group")
+
+        self.update_idletasks()
+        self.table_frame._parent_canvas.yview_moveto(1.0)
 
     def create_shortcut_buttons(self):
         shortcuts = [
