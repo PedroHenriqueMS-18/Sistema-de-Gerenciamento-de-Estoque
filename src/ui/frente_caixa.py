@@ -140,21 +140,36 @@ class TelaPDV(ctk.CTkFrame):
         self.update_idletasks()
         self.table_frame._parent_canvas.yview_moveto(1.0)
 
-    def create_shortcut_buttons(self):
+    def create_shortcut_buttons(self, comandos_map={}): # Adicionamos o parâmetro
         shortcuts = [
-            ("F1\nPesquisar", self.accent_color),
-            ("F2\nNova Venda", self.accent_color),
-            ("F3\nCliente CPF", self.accent_color),
-            ("F4\nQuantidade", self.accent_color),
-            ("F5\nFinalizar/NFC-e", self.success_color),
-            ("F6\nCancelar Venda", "#e74c3c"),
-            ("F12\nFechar Caixa", "#c0392b")
+            ("F1\nPesquisar", self.accent_color, "F1"),
+            ("F2\nNova Venda", self.accent_color, "F2"),
+            ("F3\nCliente CPF", self.accent_color, "F3"),
+            ("F4\nQuantidade", self.accent_color, "F4"),
+            ("F5\nFinalizar/NFC-e", self.success_color, "F5"),
+            ("F6\nCancelar Venda", "#e74c3c", "F6"),
+            ("F12\nFechar Caixa", "#c0392b", "F12")
         ]
         
-        for i, (text, color) in enumerate(shortcuts):
-            btn = ctk.CTkButton(self.shortcuts_frame, text=text, fg_color="transparent", 
-                                border_width=2, border_color=color, hover_color="#333333", 
-                                height=60, font=("Arial", 12, "bold"))
+        # Limpa botões antigos se houver
+        for btn in self.botoes_atalho:
+            btn.destroy()
+        self.botoes_atalho = []
+
+        for i, (text, color, tecla) in enumerate(shortcuts):
+            acao = comandos_map.get(tecla) # Busca a função no dicionário
+            
+            btn = ctk.CTkButton(
+                self.shortcuts_frame, 
+                text=text, 
+                command=acao, # Atribui a função
+                fg_color="transparent", 
+                border_width=2, 
+                border_color=color, 
+                hover_color="#333333", 
+                height=60, 
+                font=("Arial", 12, "bold")
+            )
             btn.grid(row=0, column=i, padx=5, sticky="ew")
             self.shortcuts_frame.grid_columnconfigure(i, weight=1)
             self.botoes_atalho.append(btn)

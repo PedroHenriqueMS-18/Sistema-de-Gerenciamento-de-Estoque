@@ -4,7 +4,7 @@ from ui.login import LoginWindow
 from utils.auth import UsuarioSessao
 from ui.components.modal_abertura import ModalAbertura
 from tkinter import messagebox
-from utils.pdv_service import buscar_produto_por_ean
+from utils.pdv_service import buscar_produto_por_ean, salvar_venda_completa
 import sys
 
 class MainPDV(ctk.CTk):
@@ -25,6 +25,13 @@ class MainPDV(ctk.CTk):
         self.interface = TelaPDV(master=self)
         self.interface.pack(fill="both", expand=True)
 
+        self.meus_atalhos = {
+        "F5": self.finalizar_venda,
+        "F6": self.cancelar_venda_atual,
+        "F12": self.confirmar_fechamento
+        }
+        self.interface.create_shortcut_buttons(self.meus_atalhos)
+
         self.interface.lbl_operador.configure(text=f"OPERADOR: {UsuarioSessao.nome}")
         self.interface.atualizar_status_caixa(aberto=False)
 
@@ -32,11 +39,25 @@ class MainPDV(ctk.CTk):
         self.after(500, self.disparar_abertura)
 
     def configurar_binds(self):
-        # CORREÇÃO 2: Faltavam os parênteses () no disparar_abertura e binds duplicados removidos
-        self.bind("<F2>", lambda e: self.disparar_abertura())
+        # 1. Binds específicos que já existiam
+        # F2 para abertura (usando bind_all para garantir que funcione de qualquer lugar)
+        self.bind_all("<F2>", lambda e: self.disparar_abertura())
+        
+        # Enter no campo de código de barras
         self.interface.entry_barcode.bind("<Return>", self.processar_item)
+        
+        # Botão buscar (já configurado no seu código)
         self.interface.btn_buscar.configure(command=self.processar_item)
+        
+        # Detectar o multiplicador (ex: 2*789...)
         self.interface.entry_barcode.bind("<KeyRelease>", self.detectar_multiplicador)
+
+        # 2. Loop Dinâmico para os Atalhos do Dicionário (F5, F6, F12, etc.)
+        # Isso evita que você precise fazer um self.bind para cada tecla manualmente.
+        for tecla, funcao in self.meus_atalhos.items():
+            # Usamos bind_all para que o F5 funcione mesmo se o cursor estiver no Entry
+            # f=funcao garante que o loop não 'perca' a referência da função correta
+            self.bind_all(f"<{tecla}>", lambda e, f=funcao: f())
 
     def detectar_multiplicador(self, event):
         texto = self.interface.entry_barcode.get()
@@ -129,6 +150,51 @@ class MainPDV(ctk.CTk):
     def confirmar_fechamento(self):
         if messagebox.askyesno("Sair", "Deseja realmente fechar?"):
             self.destroy()
+
+    def finalizar_venda(self):
+        if not self.itens_venda:
+            messagebox.showwarning("Atenção", "Não há itens na venda!")
+            return
+
+        if messagebox.askyesno("Finalizar", f"Confirma o fechamento da venda no valor de R$ {self.total_venda:.2f}?"):
+            # Chama o serviço (Importe a função do passo 2 no topo do arquivo)
+            sucesso, resultado = salvar_venda_completa(
+                id_operador=UsuarioSessao.id, # Usando sua classe de sessão
+                valor_total=self.total_venda,
+                lista_itens=self.itens_venda
+            )
+
+            if sucesso:
+                messagebox.showinfo("Sucesso", f"Venda #{resultado} realizada!")
+                self.limpar_caixa_pos_venda()
+            else:
+                messagebox.showerror("Erro", f"Erro ao salvar: {resultado}")
+
+    def cancelar_venda_atual(self):
+        if self.itens_venda:
+            if messagebox.askyesno("Cancelar", "Deseja cancelar toda a venda atual?"):
+                self.limpar_caixa_pos_venda()
+
+    def limpar_caixa_pos_venda(self):
+        # Reseta variáveis lógicas
+        self.itens_venda = []
+        self.total_venda = 0.0
+        self.quantidade_atual = 1.0
+        
+        # Reseta a Interface
+        self.interface.lbl_total.configure(text="TOTAL: R$ 0,00")
+        self.interface.lbl_foco_produto.configure(text="Produto Selecionado: NENHUM")
+        self.interface.lbl_unit_display.configure(text="R$ 0,00")
+        self.interface.lbl_qtd_display.configure(text="1")
+        
+        # Limpa a tabela visual (remove as linhas)
+        for widget in self.interface.table_frame.winfo_children():
+            # Não apaga o cabeçalho (que é o primeiro widget)
+            if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") != "#3d3d3d":
+                widget.destroy()
+                
+        self.interface.entry_barcode.delete(0, 'end')
+        self.interface.entry_barcode.focus()
 
 def iniciar_sistema():
     def montar_pdv():
