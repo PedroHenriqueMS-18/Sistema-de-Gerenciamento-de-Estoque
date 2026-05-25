@@ -3,8 +3,9 @@ from ui.frente_caixa import TelaPDV
 from ui.login import LoginWindow 
 from utils.auth import UsuarioSessao
 from ui.components.modal_abertura import ModalAbertura
+from ui.components.modal_pag import ModalPagamento
 from tkinter import messagebox
-from utils.pdv_service import buscar_produto_por_ean, salvar_venda_completa
+from utils.pdv_service import buscar_produto_por_ean, salvar_venda
 import sys
 
 class MainPDV(ctk.CTk):
@@ -156,23 +157,46 @@ class MainPDV(ctk.CTk):
             messagebox.showwarning("Atenção", "Não há itens na venda!")
             return
 
-        if messagebox.askyesno("Finalizar", f"Confirma o fechamento da venda no valor de R$ {self.total_venda:.2f}?"):
-            # Chama o serviço (Importe a função do passo 2 no topo do arquivo)
-            sucesso, resultado = salvar_venda_completa(
-                id_operador=UsuarioSessao.id, # Usando sua classe de sessão
+        # Abre o modal de pagamento passando o total e a função de retorno
+        ModalPagamento(
+            master=self, 
+            total_venda=self.total_venda, 
+            ao_confirmar=self.concluir_venda_banco
+        )
+
+    def concluir_venda_banco(self, id_forma, troco):
+        # Pergunta de Segurança (O MessageBox solicitado!)
+        if messagebox.askyesno("Confirmar Venda", f"Deseja realmente registrar esta venda?"):
+            from utils.pdv_service import salvar_venda_geral
+            
+            sucesso, resultado = salvar_venda_geral(
+                id_operador=UsuarioSessao.id,
                 valor_total=self.total_venda,
-                lista_itens=self.itens_venda
+                lista_itens=self.itens_venda,
+                status='CONCLUIDA',
+                id_forma_pagamento=id_forma, # <- Enviando a forma capturada
+                troco=troco                  # <- Enviando o troco calculado
             )
 
             if sucesso:
-                messagebox.showinfo("Sucesso", f"Venda #{resultado} realizada!")
+                messagebox.showinfo("Sucesso", f"Venda #{resultado} realizada com sucesso!")
                 self.limpar_caixa_pos_venda()
             else:
-                messagebox.showerror("Erro", f"Erro ao salvar: {resultado}")
-
+                messagebox.showerror("Erro", f"Erro crítico ao salvar no banco: {resultado}")
+                
     def cancelar_venda_atual(self):
-        if self.itens_venda:
-            if messagebox.askyesno("Cancelar", "Deseja cancelar toda a venda atual?"):
+        if not self.itens_venda: return
+        
+        if messagebox.askyesno("Confirmar", "Deseja cancelar esta venda?"):
+            sucesso, resultado = salvar_venda(
+                id_operador=UsuarioSessao.id,
+                valor_total=self.total_venda,
+                lista_itens=None, # Não precisamos gravar itens de venda cancelada
+                status='CANCELADA'
+            )
+
+            if sucesso:
+                messagebox.showwarning("Aviso", f"Venda #{resultado} cancelada e registrada.")
                 self.limpar_caixa_pos_venda()
 
     def limpar_caixa_pos_venda(self):
