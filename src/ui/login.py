@@ -50,18 +50,17 @@ class LoginWindow(ctk.CTk):
         self.btn_login.place(relx=0.5, rely=0.8, anchor="center")
         
     """Coleta os dados dos campos e valida as credenciais para autorizar o acesso ao sistema."""
-    def login_check(self):
+    """Coleta os dados dos campos e valida as credenciais para autorizar o acesso ao sistema."""
+    def login_check(self, event=None): # 💡 O segredo está aqui: event=None torna o argumento opcional!
         """Coleta os dados dos campos e valida as credenciais via banco de dados."""
         user = self.entry_user.get()
         password = self.entry_pass.get()
 
         if verificar_login(user, password):
-            self.destroy()
+            self.destroy()  # Agora o self vai fechar a tela de login perfeitamente!
             self.on_login_success()
         else:
             self.entry_user.delete(0, 'end')
             self.entry_pass.delete(0, 'end')
-            
             self.entry_user.focus_set()
-            
             messagebox.showerror("Erro de Acesso", "Usuário ou senha incorretos!")
