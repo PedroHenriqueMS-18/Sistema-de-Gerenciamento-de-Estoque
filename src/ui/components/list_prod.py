@@ -1,12 +1,13 @@
 import customtkinter as ctk
-from utils.product_service import buscar_produtos_db, inativar_produto_db, reativar_produto_bd, atualizar_produto_db,buscar_detalhes_produto_por_id
+# 💡 Importamos as mesmas funções, mas elas agora rodam o Supabase em segundo plano
+from utils.product_service import buscar_produtos_db, inativar_produto_db, reativar_produto_bd, atualizar_produto_db, buscar_detalhes_produto_por_id
 from ui.components.edit_modal import ProductManagerModal 
 from tkinter import messagebox
 
 class ListProd(ctk.CTkFrame):
     def __init__(self, master, db_connection=None, **kwargs):
         super().__init__(master, **kwargs)
-        self.db = db_connection
+        # self.db = db_connection  # 💡 Limpo! Não precisamos mais carregar a conexão local
         self.setup_ui()
 
     def setup_ui(self):
@@ -62,7 +63,7 @@ class ListProd(ctk.CTkFrame):
         termo_busca = self.entry_busca.get().strip()
         ver_inativos = self.check_inativos.get()
         
-        # 4. Passando agora o terceiro parâmetro (filtro) para a função do banco
+        # 4. Passando o terceiro parâmetro (filtro) para a função do banco
         filtro_atual = self.opcao_busca.get()
         produtos_reais = buscar_produtos_db(termo_busca, ver_inativos, filtro_atual)
 
@@ -72,7 +73,6 @@ class ListProd(ctk.CTkFrame):
         for child in self.tabela_frame.winfo_children():
             child.destroy()
 
-        # ... (Resto do código de renderização da tabela continua igual) ...
         self.tabela_frame.grid_columnconfigure((0, 1), weight=1, uniform="col")
         self.tabela_frame.grid_columnconfigure(2, weight=3, uniform="col")
 
@@ -80,6 +80,7 @@ class ListProd(ctk.CTkFrame):
         for i, col in enumerate(headers):
             ctk.CTkLabel(self.tabela_frame, text=col, font=("Arial", 13, "bold"), text_color="gray").grid(row=0, column=i, pady=10, sticky="nsew")
 
+        # 🔄 Ajustado os nomes das variáveis temporárias para casar direto com a tupla convertida do serviço
         for i, (p_id, p_ean, p_nome) in enumerate(produtos_reais):
             dados_p = {"id": p_id, "ean": p_ean, "nome": p_nome}
             row_idx = i + 1
@@ -106,11 +107,12 @@ class ListProd(ctk.CTkFrame):
         from utils.auth import UsuarioSessao
 
         if UsuarioSessao.nivel not in [1, 2]:
-            messagebox.showwarning("Acesso Restrito", f"Somente Administradores e Operadores podem acessar os detalhes dos produtos")
+            messagebox.showwarning("Acesso Restrito", "Somente Administradores e Operadores podem acessar os detalhes dos produtos")
             return
 
+        # Busca os detalhes usando o novo serviço que já simula perfeitamente o dicionário antigo
         detalhes = buscar_detalhes_produto_por_id(produto['id'])
         if detalhes:
             ProductManagerModal(self.winfo_toplevel(), detalhes, self.carregar_produtos_bd)
         else:
-            messagebox.showerror("Erro", "Não foi possivel carregar os detalhes do produto")
+            messagebox.showerror("Erro", "Não foi possível carregar os detalhes do produto")
