@@ -17,14 +17,12 @@ class FornecEditModal(ctk.CTkToplevel):
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         
-        # Row 0: Título
         ctk.CTkLabel(
             self, text="Gerenciamento de Fornecedor", 
             font=ctk.CTkFont(family="Arial", size=22, weight="bold")
         ).grid(row=0, column=0, columnspan=2, pady=25)
 
         self.entries = {}
-        # Lista de campos baseada na estrutura da tabela 'fornecedores'
         campos = [
             ("ID do Registro", "id"),
             ("Nome Fantasia", "nome_fantasia"),
@@ -35,7 +33,6 @@ class FornecEditModal(ctk.CTkToplevel):
             ("Endereço", "endereco")
         ]
 
-        # Loop de desenho dos campos
         for i, (label_text, chave) in enumerate(campos):
             row_idx = i + 1
             ctk.CTkLabel(self, text=f"{label_text}:", font=("Arial", 13)).grid(row=row_idx, column=0, padx=25, pady=8, sticky="e")
@@ -44,7 +41,6 @@ class FornecEditModal(ctk.CTkToplevel):
             valor = str(self.fornecedor_original.get(chave, ""))
             
             entry.insert(0, valor if valor != "None" else "")
-            # Começa desabilitado por padrão
             entry.configure(state="disabled", border_color="#3d3d3d")
             entry.grid(row=row_idx, column=1, padx=25, pady=8, sticky="w")
             self.entries[chave] = entry
@@ -93,7 +89,7 @@ class FornecEditModal(ctk.CTkToplevel):
     def solicitar_edicao(self):
         if messagebox.askyesno("SGE", "Habilitar edição deste fornecedor?"):
             for chave, entry in self.entries.items():
-                if chave != "id": # ID nunca se edita
+                if chave != "id": 
                     entry.configure(state="normal", border_color="#3498db", fg_color="#3d3d3d")
             
             self.btn_editar.configure(state="disabled", fg_color="#1e3747")

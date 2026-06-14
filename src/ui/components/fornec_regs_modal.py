@@ -13,11 +13,9 @@ class FornecRegisterModal(ctk.CTkToplevel):
         
         self.transient(master)
         self.grab_set()
-        
         self.setup_ui()
 
     def setup_ui(self):
-        # Título
         ctk.CTkLabel(self, text="Cadastrar Fornecedor", font=("Arial", 28, "bold")).pack(pady=(20, 5))
         ctk.CTkLabel(self, text="Preencha os dados comerciais da empresa", font=("Arial", 12), text_color="gray").pack(pady=(0, 20))
 
@@ -67,15 +65,6 @@ class FornecRegisterModal(ctk.CTkToplevel):
                                         height=45, font=("Arial", 14, "bold"), command=self.salvar_fornecedor)
         self.btn_salvar.pack(pady=(20, 30), padx=60, fill="x")
 
-    def limpar_campos(self):
-        self.entry_fantasia.delete(0, 'end')
-        self.entry_razao.delete(0, 'end')
-        self.entry_cnpj.delete(0, 'end')
-        self.entry_tel.delete(0, 'end')
-        self.entry_email.delete(0, 'end')
-        self.entry_end.delete(0, 'end')
-        self.entry_fantasia.focus()
-
     def salvar_fornecedor(self):
         dados = {
             "nome_fantasia": self.entry_fantasia.get().strip(),
@@ -86,12 +75,10 @@ class FornecRegisterModal(ctk.CTkToplevel):
             "endereco": self.entry_end.get().strip()
         }
 
-        # Validação: Nome Fantasia e CNPJ são cruciais
         if not dados["nome_fantasia"] or not dados["cnpj"]:
             messagebox.showwarning("Aviso", "Nome Fantasia e CNPJ são obrigatórios!")
             return
 
-        # Chamada para o Service de Fornecedor
         if cadastrar_fornecedor_db(dados):
             messagebox.showinfo("Sucesso", f"Fornecedor {dados['nome_fantasia']} cadastrado!")
             if self.ao_salvar:
