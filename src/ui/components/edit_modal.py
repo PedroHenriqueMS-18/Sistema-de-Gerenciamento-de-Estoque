@@ -7,7 +7,10 @@ class ProductManagerModal(ctk.CTkToplevel):
     def __init__(self, master, produto_data, callback_atualizar):
         super().__init__(master)
         self.title(f"SGE Manager - {produto_data['nome']}")
-        self.geometry("550x700")
+        
+        # 📏 Ajustamos a altura de 700 para 560 para encaixar o layout compacto perfeitamente
+        self.geometry("550x600")
+        self.resizable(False, False) # Evita distorções visuais
         
         self.produto_original = produto_data
         self.callback_atualizar = callback_atualizar
@@ -21,13 +24,12 @@ class ProductManagerModal(ctk.CTkToplevel):
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         
-        # 🚀 Força o grid vertical a expandir na linha dos botões para empurrar o layout para cima
-        self.grid_rowconfigure(8, weight=1)
+        # 🌟 REMOVIDO: self.grid_rowconfigure(8, weight=1) -> O fim do gap gigante!
 
         ctk.CTkLabel(
             self, text="Gerenciamento de Produto", 
             font=ctk.CTkFont(family="Arial", size=22, weight="bold")
-        ).grid(row=0, column=0, columnspan=2, pady=(20, 15))
+        ).grid(row=0, column=0, columnspan=2, pady=(25, 20))
 
         self.entries = {}
         campos = [
@@ -39,7 +41,7 @@ class ProductManagerModal(ctk.CTkToplevel):
             ("Categoria", "categoria")
         ]
 
-        # 1. Gerar campos automáticos (Rows 1 a 6) com espaçamento reduzido para caber na tela
+        # 1. Gerar campos automáticos (Rows 1 a 6)
         for i, (label_text, chave) in enumerate(campos):
             row = i + 1
             ctk.CTkLabel(self, text=f"{label_text}:", font=("Arial", 13)).grid(row=row, column=0, padx=25, pady=6, sticky="e")
@@ -60,7 +62,7 @@ class ProductManagerModal(ctk.CTkToplevel):
 
         # 2. Campo de Fornecedor (Row 7)
         row_fornec = 7
-        ctk.CTkLabel(self, text="Fornecedor:", font=("Arial", 13)).grid(row=row_fornec, column=0, padx=25, pady=10, sticky="e")
+        ctk.CTkLabel(self, text="Fornecedor:", font=("Arial", 13)).grid(row=row_fornec, column=0, padx=25, pady=6, sticky="e")
         
         # Busca fornecedores ativos para o combo Box
         fornecs_lista = buscar_fornecedores_db(mostrar_inativos=0)
@@ -75,46 +77,51 @@ class ProductManagerModal(ctk.CTkToplevel):
         fornec_atual = self.produto_original.get('fornecedor_nome', "Selecione...")
         self.combo_fornec.set(fornec_atual)
         self.combo_fornec.configure(state="disabled")
-        self.combo_fornec.grid(row=row_fornec, column=1, padx=25, pady=10, sticky="w")
+        self.combo_fornec.grid(row=row_fornec, column=1, padx=25, pady=6, sticky="w")
 
-        # --- FRAME DE AÇÕES (Seu painel clássico de botões) ---
-        self.actions_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.actions_frame.grid(row=8, column=0, columnspan=2, pady=(15, 10), sticky="s")
+        # --- CONTAINER CONCENTRADO DE AÇÕES (Row 8) ---
+        # Criamos um frame principal para as ações ficarem unidas e não se espalharem na tela
+        self.container_botoes = ctk.CTkFrame(self, fg_color="transparent")
+        self.container_botoes.grid(row=8, column=0, columnspan=2, pady=(25, 15), sticky="n")
+
+        # Sub-frame para a linha dos 3 botões principais
+        self.actions_frame = ctk.CTkFrame(self.container_botoes, fg_color="transparent")
+        self.actions_frame.pack(pady=(0, 15))
 
         self.btn_editar = ctk.CTkButton(
             self.actions_frame, text="Habilitar Edição", 
             fg_color="#3498db", hover_color="#2980b9",
             command=self.solicitar_edicao
         )
-        self.btn_editar.pack(side="left", padx=10)
+        self.btn_editar.pack(side="left", padx=8)
 
         self.btn_salvar = ctk.CTkButton(
             self.actions_frame, text="Salvar", 
             fg_color="#2ecc71", hover_color="#27ae60",
             state="disabled", command=self.confirmar_salvamento
         )
-        self.btn_salvar.pack(side="left", padx=10)
+        self.btn_salvar.pack(side="left", padx=8)
 
         self.btn_cancelar = ctk.CTkButton(
             self.actions_frame, text="Cancelar Edição", 
             fg_color="#e67e22", hover_color="#d35400",
             state="disabled", command=self.resetar_estado_padrao
         )
-        self.btn_cancelar.pack(side="left", padx=10)
+        self.btn_cancelar.pack(side="left", padx=8)
 
-        # --- BOTÃO DE STATUS DINÂMICO ---
+        # --- BOTÃO DE STATUS DINÂMICO (Ancorado logo abaixo dos botões) ---
         self.produto_ativo = self.produto_original.get('ativo', True)
         status_texto = "Inativar Produto" if self.produto_ativo else "Reativar Produto"
         status_cor = "#e74c3c" if self.produto_ativo else "#27ae60"
         status_hover = "#c0392b" if self.produto_ativo else "#219150"
         
         self.btn_status = ctk.CTkButton(
-            self, text=status_texto, 
+            self.container_botoes, text=status_texto,
             fg_color=status_cor, hover_color=status_hover,
             state="disabled",
             command=self.executar_inativacao if self.produto_ativo else self.executar_ativacao
         )
-        self.btn_status.grid(row=9, column=0, columnspan=2, pady=(5, 20), sticky="n")
+        self.btn_status.pack()
 
     def solicitar_edicao(self):
         if messagebox.askyesno("SGE Manager", "Deseja habilitar os campos para edição?"):
@@ -171,7 +178,7 @@ class ProductManagerModal(ctk.CTkToplevel):
                 }
                 
                 if atualizar_produto_db(novos_dados):
-                    messagebox.showinfo("Sucesso", "Produto updated com sucesso!")
+                    messagebox.showinfo("Sucesso", "Produto atualizado com sucesso!")
                     
                     # 🔄 Recarrega os dados na tabela em segundo plano
                     self.callback_atualizar()
