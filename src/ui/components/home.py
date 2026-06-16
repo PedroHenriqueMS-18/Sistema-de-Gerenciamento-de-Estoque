@@ -1,7 +1,6 @@
 import customtkinter as ctk
-import psycopg2
-from utils.auth import UsuarioSessao
-from utils.db_config import DB_CONFIG
+# Importamos o cliente e a sessão do Supabase
+from utils.auth import supabase_client, UsuarioSessao
 from ui.components.cadastro_prod import PopUpCadastro
 from tkinter import messagebox
 
@@ -19,7 +18,6 @@ class Home(ctk.CTkFrame):
         self.carregar_total_produtos()
 
     def setup_ui(self):
-        # ... (seu código de UI permanece o mesmo até o label_valor_prod)
         self.label_welcome = ctk.CTkLabel(self, text="Bem-vindo ao SGE Manager", font=("Arial", 32, "bold"))
         self.label_welcome.pack(pady=(40, 50), padx=50, anchor="w")
 
@@ -36,40 +34,42 @@ class Home(ctk.CTkFrame):
         self.label_valor_prod = ctk.CTkLabel(self.card_produtos, text="...", font=("Arial", 64, "bold"), text_color="white")
         self.label_valor_prod.pack(pady=(10, 40))
 
-        # ... (restante dos botões e frames de ação)
+        # --- FRAME DE AÇÕES ---
         self.actions_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.actions_frame.pack(fill="x", padx=50, pady=50)
 
         self.btn_new_prod = ctk.CTkButton(self.actions_frame, text="CADASTRAR NOVO PRODUTO", fg_color="#2ecc71", 
-                                         command=self.abrir_popup_cadastro, height=50, font=("Arial", 16, "bold"))
+                                          command=self.abrir_popup_cadastro, height=50, font=("Arial", 16, "bold"))
         self.btn_new_prod.pack(side="left", expand=True, padx=(0, 10), fill="x")
 
+        # Trava de Segurança visual por Nível de Usuário
         if UsuarioSessao.nivel not in [1, 2]:
             self.btn_new_prod.configure(state="disabled", fg_color="gray", text="Acesso Restrito")
 
         self.btn_view_estoque = ctk.CTkButton(self.actions_frame, text="VER ESTOQUE ABERTO", fg_color="#3498db", 
-                                             command=self.ir_para_estoque, height=50, font=("Arial", 16, "bold"))
+                                              command=self.ir_para_estoque, height=50, font=("Arial", 16, "bold"))
         self.btn_view_estoque.pack(side="left", expand=True, padx=(10, 0), fill="x")
 
     def carregar_total_produtos(self):
-        """Busca no banco de dados a quantidade total de itens cadastrados."""
-        conn = None
+        """Busca no Supabase a quantidade total de itens ativos cadastrados."""
         try:
-            conn = psycopg2.connect(**DB_CONFIG)
-            cur = conn.cursor()
+            # 💡 EXPLICAÇÃO DA MÁGICA:
+            # Pedimos para selecionar apenas o ID (para ser super leve), mas passamos o parâmetro
+            # count="exact". Isso faz o Supabase retornar a contagem real na propriedade .count
+            response = supabase_client.table("produtos")\
+                .select("id", count="exact")\
+                .eq("ativo", True)\
+                .execute()
             
-            # Query mágica que conta as linhas da tabela
-            cur.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
-            total = cur.fetchone()[0] # Pega o primeiro valor da primeira linha resultante
+            # Capturamos o número total gerado direto na nuvem
+            total = response.count if response.count is not None else 0
             
+            # Atualiza o imponente label na tela principal
             self.label_valor_prod.configure(text=str(total))
-            cur.close()
+            
         except Exception as e:
-            print(f"Erro ao carregar contador: {e}")
+            print(f"❌ Erro ao carregar contador do Supabase: {e}")
             self.label_valor_prod.configure(text="Err")
-        finally:
-            if conn:
-                conn.close()
 
     def abrir_popup_cadastro(self):
         if UsuarioSessao.nivel in [1, 2]:
@@ -80,11 +80,7 @@ class Home(ctk.CTkFrame):
         else:
             messagebox.showwarning("Acesso restrito", "Apenas Administradores ou Operadores podem cadastrar novos produtos.")
         
-
     def atualizar_contador_dashboard(self):
         """Ação disparada após o cadastro de sucesso no Pop-up."""
-        print("Novo produto detectado. Atualizando contador via Banco de Dados...")
-        # Em vez de somar manualmente, chamamos a fonte da verdade: o Banco!
+        print("🔄 Novo produto detectado. Atualizando contador via Supabase...")
         self.carregar_total_produtos()
-
-    
