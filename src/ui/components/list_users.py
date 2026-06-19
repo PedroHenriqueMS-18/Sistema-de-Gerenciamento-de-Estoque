@@ -2,7 +2,6 @@ import customtkinter as ctk
 from utils.user_service import buscar_usuarios_db, buscar_usuario_por_id
 from tkinter import messagebox
 
-
 class ListUsers(ctk.CTkFrame):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
@@ -73,11 +72,9 @@ class ListUsers(ctk.CTkFrame):
         for child in self.tabela_frame.winfo_children():
             child.destroy()
 
-        # 1. Configuração de Colunas do Container Principal
         self.tabela_frame.grid_columnconfigure((0, 2, 3), weight=1, uniform="col")
         self.tabela_frame.grid_columnconfigure(1, weight=3, uniform="col")
 
-        # --- CABEÇALHOS CENTRALIZADOS (Sem sticky ou anchor manual) ---
         headers = ["ID", "Nome Completo", "Login (Usuário)", "Cargo / Nível"]
         for i, col in enumerate(headers):
             ctk.CTkLabel(
@@ -87,7 +84,6 @@ class ListUsers(ctk.CTkFrame):
                 text_color="gray"
             ).grid(row=0, column=i, pady=10)
 
-        # --- LINHAS DA TABELA ---
         for i, (u_id, u_nome, u_login, u_nivel, u_ativo) in enumerate(usuarios_reais):
             dados_u = {"id": u_id, "nome": u_nome, "login": u_login, "nivel": u_nivel}
             
@@ -97,16 +93,13 @@ class ListUsers(ctk.CTkFrame):
                 cor_fundo = "#4a2a2a"
 
             row_frame = ctk.CTkFrame(self.tabela_frame, fg_color=cor_fundo, corner_radius=5, cursor="hand2")
-            # Importante: padx=0 para não empurrar a linha em relação ao cabeçalho
             row_frame.grid(row=row_idx, column=0, columnspan=4, sticky="ew", padx=0, pady=2)
             
-            # Repete a configuração de pesos exatamente igual
             row_frame.grid_columnconfigure((0, 2, 3), weight=1, uniform="col")
             row_frame.grid_columnconfigure(1, weight=3, uniform="col")
 
             texto_cargo = self.niveis_map.get(u_nivel, "Desconhecido")
 
-            # Agora os Labels apenas com .grid(), deixando o Tkinter centralizar
             l1 = ctk.CTkLabel(row_frame, text=str(u_id))
             l1.grid(row=0, column=0, pady=8)
             
@@ -126,25 +119,17 @@ class ListUsers(ctk.CTkFrame):
 
     def abrir_cadastro_usuario(self):
         from ui.components.user_regs_modal import UserRegisterModal
-
         UserRegisterModal(master=self.winfo_toplevel(), ao_salvar=self.carregar_usuarios_bd)
 
     def abrir_detalhes_usuario(self, usuario):
         from ui.components.user_edit_modal import UserManagerModal
         from utils.auth import UsuarioSessao
-
         try:
-            # 1. Busca os detalhes frescos no banco
             detalhes = buscar_usuario_por_id(usuario['id']) 
-            
-            # 2. Pega o ID da sessão (Verifique se é .id ou .user_id no seu auth.py)
             id_sessao = UsuarioSessao.id 
-            
             if detalhes:
-                # 3. Abre o Modal. Usamos winfo_toplevel() para ele ficar por cima de tudo
                 UserManagerModal(self.winfo_toplevel(), detalhes, self.carregar_usuarios_bd, id_sessao)
             else:
                 messagebox.showerror("Erro", "Não foi possível carregar os detalhes do funcionário no banco.")
-                
         except Exception as e:
             messagebox.showerror("Erro de Execução", f"Ocorreu um erro ao tentar abrir o modal: {e}")

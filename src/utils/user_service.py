@@ -1,27 +1,16 @@
-import psycopg2
+from utils.auth import supabase_client, UsuarioSessao
 from utils.logger import registrar_log
-from utils.db_config import DB_CONFIG
 from tkinter import messagebox
 import bcrypt
 
 def buscar_usuarios_db(termo_busca="", mostrar_inativos=0, filtro="Nome"):
-    """Busca usuários baseada no termo, no status e no campo selecionado (ID, Nome ou Usuário)."""
-    conn = None
+    """Busca usuários no Supabase baseada no termo, status e campo selecionado."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
+        query = supabase_client.table("login").select("id, nome, usuario, nivel, ativo")
         
-        # Selecionamos os campos que definimos para a tabela de usuários
-        query = "SELECT id, nome, usuario, nivel, ativo FROM login"
-        
-        filtros = []
-        params = []
-
-        # 1. Filtro de Status (Ativo/Inativo)
         if not mostrar_inativos:
-            filtros.append("ativo = TRUE")
+            query = query.eq("ativo", True)
 
-        # 2. Lógica Dinâmica de Busca
         if termo_busca:
             mapeamento = {
                 "ID": "id",
@@ -32,250 +21,174 @@ def buscar_usuarios_db(termo_busca="", mostrar_inativos=0, filtro="Nome"):
 
             if filtro == "ID":
                 if termo_busca.isdigit():
-                    filtros.append(f"{coluna_selecionada} = %s")
-                    params.append(int(termo_busca))
+                    query = query.eq(coluna_selecionada, int(termo_busca))
                 else:
-                    filtros.append("id = -1") 
+                    query = query.eq("id", -1) 
             else:
-                # Busca parcial para Nome e Login (Usuário)
-                filtros.append(f"{coluna_selecionada} ILIKE %s")
-                params.append(f"%{termo_busca}%")
-
-        # 3. Montagem da Query
-        if filtros:
-            query += " WHERE " + " AND ".join(filtros)
+                query = query.ilike(coluna_selecionada, f"%{termo_busca}%")
         
-        query += " ORDER BY nome ASC"
+        query = query.order("nome", desc=False)
+        response = query.execute()
 
-        cur.execute(query, params)
-        return cur.fetchall()
-        
+        dados_tupla = []
+        if response.data:
+            for item in response.data:
+                dados_tupla.append((
+                    item.get("id"),
+                    item.get("nome"),
+                    item.get("usuario"),
+                    item.get("nivel"),
+                    item.get("ativo")
+                ))
+        return dados_tupla
     except Exception as e:
-        print(f"Erro ao buscar usuários: {e}")
+        print(f"❌ Erro ao buscar usuários no Supabase: {e}")
         return []
-    finally:
-        if conn: 
-            conn.close()
 
 def buscar_usuario_por_id(user_id):
-    conn = None
+    """Busca os detalhes de um único usuário pelo ID."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
-        
-        # Selecionamos tudo que o modal precisa
-        query = "SELECT id, nome, usuario, nivel, ativo, cpf FROM login WHERE id = %s"
-        cur.execute(query, (user_id,))
-        row = cur.fetchone()
-        
-        if row:
-            # Transformamos em dicionário para o Modal ler fácil
+        response = supabase_client.table("login").select("id, nome, usuario, nivel, ativo, cpf").eq("id", user_id).execute()
+        if response.data:
+            item = response.data[0]
             return {
-                "id": row[0],
-                "nome": row[1],
-                "login": row[2],
-                "nivel": row[3],
-                "ativo": row[4],
-                "cpf": row[5]
+                "id": item.get("id"),
+                "nome": item.get("nome"),
+                "login": item.get("usuario"), # Mapeado para 'login' conforme seu modal espera
+                "nivel": item.get("nivel"),
+                "ativo": item.get("ativo"),
+                "cpf": item.get("cpf")
             }
         return None
     except Exception as e:
-        print(f"Erro ao buscar detalhes: {e}")
+        print(f"❌ Erro ao buscar detalhes do usuário: {e}")
         return None
-    finally:
-        if conn: conn.close()
-
-# No topo do arquivo: from utils.db_config import get_connection (ou como você chama sua conexão)
 
 def atualizar_usuario_db(dados):
-    conn = None
+    """Atualiza os dados cadastrais do funcionário e gera log comparativo."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
-
-        # 1. BUSCAR DADOS ATUAIS (O "Antes") para comparação
-        # Buscamos as colunas que podem ser alteradas
-        cur.execute("SELECT nome, usuario, cpf, nivel FROM login WHERE id = %s", (dados['id'],))
-        antigo = cur.fetchone()
-
+        antigo = buscar_usuario_por_id(dados['id'])
         if not antigo:
             return False
 
-        # 2. EXECUTAR O UPDATE
-        query = "UPDATE login SET nome = %s, usuario = %s, cpf = %s, nivel = %s WHERE id = %s"
-        
         nivel_novo = int(dados['nivel'])
         id_usuario_alvo = int(dados['id'])
-        
-        novos_valores = (
-            dados['nome'],
-            dados['login'],
-            dados['cpf'],
-            nivel_novo,
-            id_usuario_alvo
-        )
 
-        cur.execute(query, novos_valores)
+        valores_update = {
+            "nome": dados['nome'],
+            "usuario": dados['login'],
+            "cpf": dados['cpf'],
+            "nivel": nivel_novo
+        }
+        supabase_client.table("login").update(valores_update).eq("id", id_usuario_alvo).execute()
 
-        # 3. COMPARAR AS MUDANÇAS (A "Fofoca" técnica)
         mudancas = []
-        if antigo[0] != dados['nome']:
-            mudancas.append(f"Nome: '{antigo[0]}' -> '{dados['nome']}'")
-        
-        if antigo[1] != dados['login']:
-            mudancas.append(f"Login: '{antigo[1]}' -> '{dados['login']}'")
-            
-        if antigo[2] != dados['cpf']:
-            mudancas.append(f"CPF: {antigo[2]} -> {dados['cpf']}")
-            
-        if int(antigo[3]) != nivel_novo:
-            mudancas.append(f"Nível: {antigo[3]} -> {nivel_novo}")
+        if antigo['nome'] != dados['nome']:
+            mudancas.append(f"Nome: '{antigo['nome']}' -> '{dados['nome']}'")
+        if antigo['login'] != dados['login']:
+            mudancas.append(f"Login: '{antigo['login']}' -> '{dados['login']}'")
+        if antigo['cpf'] != dados['cpf']:
+            mudancas.append(f"CPF: '{antigo['cpf']}' -> '{dados['cpf']}'")
+        if int(antigo['nivel']) != nivel_novo:
+            mudancas.append(f"Nível: {antigo['nivel']} -> {nivel_novo}")
 
-        # Se não houver mudanças, avisamos no log
         detalhes_finais = " | ".join(mudancas) if mudancas else "Dados salvos sem alterações."
 
-        # 4. REGISTRAR O LOG (Importando a sua função genérica)
-        
-        registrar_log(
-            cursor=cur,
-            acao="ALTERAÇÃO DE PERFIL",
-            tabela="login", # Nome da sua tabela de usuários
-            registro_id=id_usuario_alvo,
-            detalhes=detalhes_finais
-        )
+        try:
+            registrar_log(
+                cursor=None,
+                acao="ALTERAÇÃO DE PERFIL",
+                tabela="login",
+                registro_id=id_usuario_alvo,
+                detalhes=f"Alterado por {UsuarioSessao.nome} | " + detalhes_finais
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao registrar log de perfil: {log_err}")
 
-        # 5. COMMIT (Salva o UPDATE e o LOG juntos)
-        conn.commit()
-        cur.close()
         return True
-
     except Exception as e:
-        if conn: conn.rollback()
-        print(f"Erro ao atualizar e logar usuário: {e}")
+        print(f"❌ Erro ao atualizar usuário no Supabase: {e}")
         return False
-    finally:
-        if conn:
-            conn.close()
 
 def inativar_usuario_db(usuario_id):
-    """Muda o status do usuário para inativo (ativo = False)."""
-    
-    conn = None
+    """Desativa o acesso de um funcionário no sistema."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
+        supabase_client.table("login").update({"ativo": False}).eq("id", usuario_id).execute()
         
-        query = "UPDATE login SET ativo = FALSE WHERE id = %s"
-
-        cur.execute(query, (usuario_id,))
-
-        detalhe = f"Inativou o produto (ID: {usuario_id})"
-
-        registrar_log(
-            cursor=cur,
-            acao="INATIVAÇÃO",
-            tabela="produtos",
-            registro_id=usuario_id,
-            detalhes=detalhe
-        )
-
-        conn.commit()
-        cur.close
+        try:
+            registrar_log(
+                cursor=None,
+                acao="INATIVAÇÃO",
+                tabela="login", # 🐛 Corrigido: era 'produtos' no seu código original
+                registro_id=usuario_id,
+                detalhes=f"O funcionário (ID: {usuario_id}) foi inativado por {UsuarioSessao.nome}."
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao registrar log de inativação: {log_err}")
         return True
     except Exception as e:
-        if conn: conn.rollback()
-        print(f"Erro ao inativar {e}")
+        print(f"❌ Erro ao inativar usuário no Supabase: {e}")
         return False
-    finally:
-        if conn: conn.close()
 
 def reativar_usuario_db(usuario_id):
-    """Muda o status do usuário para ativo (ativo = True)."""
-    conn = None
+    """Reativa o acesso de um funcionário no sistema."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
+        supabase_client.table("login").update({"ativo": True}).eq("id", usuario_id).execute()
         
-        query = "UPDATE login SET ativo = TRUE WHERE id = %s"
-
-        cur.execute(query, (usuario_id,))
-
-        detalhe = f"Reativou o produto (ID: {usuario_id})"
-
-        registrar_log(
-            cursor=cur,
-            acao="REATIVAÇÃO",
-            tabela="produtos",
-            registro_id=usuario_id,
-            detalhes=detalhe
-        )
-        conn.commit()
-        cur.close
+        try:
+            registrar_log(
+                cursor=None,
+                acao="REATIVAÇÃO",
+                tabela="login", # 🐛 Corrigido: era 'produtos' no seu código original
+                registro_id=usuario_id,
+                detalhes=f"O funcionário (ID: {usuario_id}) foi reativado por {UsuarioSessao.nome}."
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao registrar log de reativação: {log_err}")
         return True
     except Exception as e:
-        if conn: conn.rollback()
-        print(f"Erro ao inativar {e}")
+        print(f"❌ Erro ao reativar usuário no Supabase: {e}")
         return False
-    finally:
-        if conn: conn.close()
 
 def cadastrar_usuario_db(dados):
-    # Gerando o hash da senha por segurança
-    senha_plana = dados['senha'].encode('utf-8')
-    hash_gerado = bcrypt.hashpw(senha_plana, bcrypt.gensalt())
-
-    conn = None
+    """Cadastra um novo colaborador criptografando a senha com bcrypt."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
+        senha_plana = dados['senha'].encode('utf-8')
+        hash_gerado = bcrypt.hashpw(senha_plana, bcrypt.gensalt())
 
-        # 1. Inserção com RETURNING para pegar o ID gerado pelo Serial
-        query = """
-            INSERT INTO login (nome, cpf, usuario, nivel, pass) 
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
-        """
-        valores = (
-            dados['nome'],
-            dados['cpf'],
-            dados['login'],
-            dados['nivel'],
-            hash_gerado.decode('utf-8')
-        )
+        valores_insert = {
+            "nome": dados['nome'],
+            "cpf": dados['cpf'],
+            "usuario": dados['login'],
+            "nivel": int(dados['nivel']),
+            "pass": hash_gerado.decode('utf-8'),
+            "ativo": True
+        }
         
-        cur.execute(query, valores)
+        response = supabase_client.table("login").insert(valores_insert).execute()
         
-        # Pega o ID do usuário que acabou de ser criado
-        novo_usuario_id = cur.fetchone()[0]
+        novo_usuario_id = None
+        if response.data:
+            novo_usuario_id = response.data[0].get("id")
 
-        # 2. Preparando os detalhes do log
-        # Mapeamos o nível para ficar legível no log
         niveis_map = {1: "Administrador", 2: "Operador", 3: "Vendedor"}
         nivel_nome = niveis_map.get(int(dados['nivel']), "Desconhecido")
         
-        from utils.auth import UsuarioSessao
         detalhe_log = (f"O administrador {UsuarioSessao.nome} cadastrou um novo funcionário: "
                        f"{dados['nome']} | Login: {dados['login']} | Nível: {nivel_nome}")
 
-        # 3. Registrando o Log (Importando a função genérica)
-        from utils.logger import registrar_log
-        registrar_log(
-            cursor=cur,
-            acao="CADASTRO USUÁRIO",
-            tabela="login",
-            registro_id=novo_usuario_id,
-            detalhes=detalhe_log
-        )
+        try:
+            registrar_log(
+                cursor=None,
+                acao="CADASTRO USUÁRIO",
+                tabela="login",
+                registro_id=novo_usuario_id,
+                detalhes=detalhe_log
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao registrar log de novo usuário: {log_err}")
 
-        # 4. Commit final: salva o usuário e o log de uma vez só
-        conn.commit()
-        cur.close()
         return True
-
     except Exception as e:
-        if conn: conn.rollback() # Se algo falhar, não salva nada
-        messagebox.showerror("Erro", f"Erro no banco: {e}")
+        messagebox.showerror("Erro", f"Erro ao cadastrar usuário no Supabase: {e}")
         return False
-    finally:
-        if conn: conn.close()
-    
-

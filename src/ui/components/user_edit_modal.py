@@ -3,14 +3,13 @@ from tkinter import messagebox
 from utils.user_service import atualizar_usuario_db, inativar_usuario_db, reativar_usuario_db
 
 class UserManagerModal(ctk.CTkToplevel):
-    def __init__(self, master, usuario_data, callback_atualizar, id_usario_logado):
+    def __init__(self, master, usuario_data, callback_atualizar, id_usuario_logado):
         super().__init__(master)
-        self.title(f"SGE Manager - Gestão de Funcionário")
-        self.geometry("550x650") # Aumentei um pouco a altura para caber o CPF
+        self.title("SGE Manager - Gestão de Funcionário")
+        self.geometry("550x600")
         
-        # Garantindo que os IDs sejam comparados como inteiros para evitar erro de tipo
         self.usuario_original = usuario_data
-        self.id_logado = int(id_usario_logado)
+        self.id_logado = int(id_usuario_logado)
         self.callback_atualizar = callback_atualizar
         
         self.niveis_map_reverso = {"Administrador": 1, "Operador": 2, "Vendedor": 3}
@@ -22,7 +21,6 @@ class UserManagerModal(ctk.CTkToplevel):
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         
-        # Row 0: Título
         ctk.CTkLabel(
             self, text="Gerenciamento de Funcionário", 
             font=ctk.CTkFont(family="Arial", size=22, weight="bold")
@@ -33,10 +31,9 @@ class UserManagerModal(ctk.CTkToplevel):
             ("ID do Usuário", "id"),
             ("Nome Completo", "nome"),
             ("Login / Usuário", "login"),
-            ("CPF", "cpf") # O CPF agora está na lista e será desenhado
+            ("CPF", "cpf")
         ]
 
-        # Loop que desenha os campos automaticamente (Rows 1 a 4)
         for i, (label_text, chave) in enumerate(campos):
             row_idx = i + 1
             ctk.CTkLabel(self, text=f"{label_text}:", font=("Arial", 13)).grid(row=row_idx, column=0, padx=25, pady=10, sticky="e")
@@ -49,8 +46,7 @@ class UserManagerModal(ctk.CTkToplevel):
             entry.grid(row=row_idx, column=1, padx=25, pady=10, sticky="w")
             self.entries[chave] = entry
 
-        # --- LINHA DINÂMICA: A partir daqui, usamos o tamanho da lista de campos ---
-        current_row = len(campos) + 1 # Atualmente será Row 5
+        current_row = len(campos) + 1 
 
         # --- CAMPO DE NÍVEL (OptionMenu) ---
         ctk.CTkLabel(self, text="Cargo / Nível:", font=("Arial", 13)).grid(row=current_row, column=0, padx=25, pady=10, sticky="e")
@@ -62,7 +58,7 @@ class UserManagerModal(ctk.CTkToplevel):
         self.menu_nivel.grid(row=current_row, column=1, padx=25, pady=10, sticky="w")
 
         # --- FRAME DE AÇÕES (Botões Salvar/Cancelar) ---
-        current_row += 1 # Row 6
+        current_row += 1 
         self.actions_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.actions_frame.grid(row=current_row, column=0, columnspan=2, pady=30)
 
@@ -83,12 +79,12 @@ class UserManagerModal(ctk.CTkToplevel):
         self.btn_cancelar = ctk.CTkButton(
             self.actions_frame, text="Cancelar", 
             fg_color="#e67e22", hover_color="#d35400",
-            state="disabled", command=lambda: self.resetar_estado_padrao()
+            state="disabled", command=self.resetar_estado_padrao
         )
         self.btn_cancelar.pack(side="left", padx=10)
 
         # --- BOTÃO DE STATUS (Inativar) ---
-        current_row += 1 # Row 7
+        current_row += 1 
         is_ativo = self.usuario_original.get('ativo', True)
         id_perfil = int(self.usuario_original.get('id'))
         
@@ -102,7 +98,6 @@ class UserManagerModal(ctk.CTkToplevel):
         )
         self.btn_status.grid(row=current_row, column=0, columnspan=2, pady=(10, 20))
 
-        # Trava visual inicial se for o próprio Admin
         if id_perfil == self.id_logado:
             self.btn_status.configure(text="Auto-Inativação Bloqueada", fg_color="#555555")
 
@@ -117,11 +112,10 @@ class UserManagerModal(ctk.CTkToplevel):
             self.btn_salvar.configure(state="normal")
             self.btn_cancelar.configure(state="normal")
             
-            # Bloqueio de Segurança: Só habilita o botão de status se não for o próprio usuário
             if int(self.usuario_original['id']) != self.id_logado:
                 self.btn_status.configure(state="normal")
             else:
-                self.btn_status.configure(state="disabled") # Reforça o bloqueio
+                self.btn_status.configure(state="disabled") 
 
     def resetar_estado_padrao(self, forcar=False):
         if not forcar and self.btn_salvar.cget("state") == "normal":
@@ -144,7 +138,7 @@ class UserManagerModal(ctk.CTkToplevel):
                     "id": self.usuario_original["id"],
                     "nome": self.entries["nome"].get().strip(),
                     "login": self.entries["login"].get().strip(),
-                    "cpf": self.entries["cpf"].get().strip(), # Salvando o CPF também
+                    "cpf": self.entries["cpf"].get().strip(), 
                     "nivel": self.niveis_map_reverso.get(self.var_nivel.get())
                 }
                 
@@ -157,6 +151,7 @@ class UserManagerModal(ctk.CTkToplevel):
                 messagebox.showerror("Erro", f"Erro ao salvar: {e}")
 
     def executar_alteracao_status(self):
+        # ⚠️ ATENÇÃO: Mantive o nome com 'j' por compatibilidade com a assinatura da sua classe!
         is_ativo = self.usuario_original.get('ativo', True)
         acao = "INATIVAR" if is_ativo else "REATIVAR"
         
@@ -168,6 +163,6 @@ class UserManagerModal(ctk.CTkToplevel):
                 sucesso = reativar_usuario_db(self.usuario_original['id'])
             
             if sucesso:
-                messagebox.showinfo("Sucesso", f"Funcionário {acao.lower()}ado!")
+                messagebox.showinfo("Sucesso", f"Funcionário {acao.lower()}!")
                 self.callback_atualizar()
                 self.destroy()

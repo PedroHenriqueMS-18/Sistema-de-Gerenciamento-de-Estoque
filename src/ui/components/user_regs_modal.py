@@ -13,11 +13,9 @@ class UserRegisterModal(ctk.CTkToplevel):
         
         self.transient(master)
         self.grab_set()
-        
         self.setup_ui()
 
     def setup_ui(self):
-        # Título
         ctk.CTkLabel(self, text="Cadastrar Funcionário", font=("Arial", 28, "bold")).pack(pady=(30, 5))
         ctk.CTkLabel(self, text="Preencha os dados de acesso do colaborador", font=("Arial", 12), text_color="gray").pack(pady=(0, 20))
 
@@ -62,19 +60,17 @@ class UserRegisterModal(ctk.CTkToplevel):
         self.entry_confirm = ctk.CTkEntry(self.frame_dir, width=220, height=40, show="*")
         self.entry_confirm.pack(pady=(5, 20), padx=20)
 
-        # Botão Salvar
         self.btn_salvar = ctk.CTkButton(self, text="FINALIZAR CADASTRO", fg_color="#27ae60", hover_color="#219150", 
                                         height=45, font=("Arial", 14, "bold"), command=self.salvar_usuario)
         self.btn_salvar.pack(pady=(20, 30), padx=60, fill="x")
 
     def limpar_campos(self):
-        """Limpa todos os campos de entrada de texto após o cadastro."""
         self.entry_nome.delete(0, 'end')
         self.entry_cpf.delete(0, 'end')
         self.entry_login.delete(0, 'end')
         self.entry_senha.delete(0, 'end')
         self.entry_confirm.delete(0, 'end')
-        self.combo_nivel.set("Vendedor") # Opcional: reseta o nível para o padrão
+        self.combo_nivel.set("Vendedor") 
         self.entry_nome.focus()
 
     def salvar_usuario(self):
@@ -89,7 +85,6 @@ class UserRegisterModal(ctk.CTkToplevel):
             "confirmacao": self.entry_confirm.get()
         }
 
-        # Validações Básicas
         if not all([dados["nome"], dados["cpf"], dados["login"], dados["senha"]]):
             messagebox.showwarning("Aviso", "Todos os campos são obrigatórios!")
             return
@@ -98,11 +93,8 @@ class UserRegisterModal(ctk.CTkToplevel):
             messagebox.showerror("Erro", "As senhas não coincidem!")
             return
 
-        # Chamada para o Service
         if cadastrar_usuario_db(dados):
             messagebox.showinfo("Sucesso", f"Funcionário {dados['nome']} cadastrado!")
             if self.ao_salvar:
                 self.ao_salvar()
-
             self.limpar_campos()
-        
