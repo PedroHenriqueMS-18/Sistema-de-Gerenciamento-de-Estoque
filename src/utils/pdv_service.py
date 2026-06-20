@@ -1,89 +1,99 @@
-from utils.db_config import DB_CONFIG
-import psycopg2
-# Certifique-se que o caminho do import está correto
+from utils.auth import supabase_client
+from utils.logger import registrar_log
 
 def buscar_produto_por_ean(codigo_ean):
     """
-    Conecta ao banco, busca o produto pelo EAN e retorna uma tupla.
-    Retorna None se o produto não for encontrado ou houver erro.
+    Conecta ao Supabase, busca o produto pelo EAN e retorna uma tupla.
+    Retorna None se o produto não for encontrado, estiver inativo ou houver erro.
     """
-    conn = None
-    produto = None
-    
     try:
-        # 1. Abre a conexão usando o seu dicionário DB_CONFIG
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
+        # Buscamos o produto na nuvem que tenha o EAN correspondente e esteja ativo
+        response = supabase_client.table("produtos")\
+            .select("id, cod_ean, nome, preco, quantidade")\
+            .eq("cod_ean", str(codigo_ean))\
+            .eq("ativo", True)\
+            .execute()
         
-        # 2. Define a Query (conforme sua coluna 'cod_ean')
-        query = """
-            SELECT id, cod_ean, nome, preco, quantidade
-            FROM produtos 
-            WHERE cod_ean = %s
-        """
-        
-        # 3. Executa a busca
-        cursor.execute(query, (codigo_ean,))
-        produto = cursor.fetchone() 
-        
-        # 4. Fecha o cursor
-        cursor.close()
+        # Se a lista .data não estiver vazia, significa que achamos o produto!
+        if response.data:
+            item = response.data[0] # Isolamos o dicionário do índice zero
+            
+            # Devolvemos os dados formatados em tupla para manter compatibilidade com sua UI
+            return (
+                item.get("id"),
+                item.get("cod_ean"),
+                item.get("nome"),
+                float(item.get("preco", 0.0)),
+                int(item.get("quantidade", 0))
+            )
+        return None
 
     except Exception as e:
-        print(f"ERRO DE BANCO DE DADOS: {e}")
-        # Aqui você poderia disparar um log ou um alerta
+        print(f"❌ ERRO AO BUSCAR PRODUTO POR EAN NO SUPABASE: {e}")
         return None
-        
-    finally:
-        # 5. GARANTE que a conexão será fechada, mesmo se der erro
-        if conn is not None:
-            conn.close()
-            
-    return produto
 
 def salvar_venda(id_operador, valor_total, lista_itens=None, status='CONCLUIDA'):
     """
-    Função híbrida: 
-    - Se status='CONCLUIDA': Salva venda, itens e baixa estoque.
-    - Se status='CANCELADA': Salva apenas a venda para auditoria.
+    Função híbrida para o Supabase: 
+    - Se status='CONCLUIDA': Salva venda, insere itens em lote e baixa estoque de cada um.
+    - Se status='CANCELADA': Salva apenas o cabeçalho da venda para auditoria de caixa.
     """
-    conn = None
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
+        # 1. SALVA O CABEÇALHO DA VENDA
+        payload_venda = {
+            "id_operador": int(id_operador),
+            "valor_total": float(valor_total),
+            "status": status
+        }
+        
+        response_venda = supabase_client.table("vendas").insert(payload_venda).execute()
+        
+        if not response_venda.data:
+            return False, "Não foi possível registrar o cabeçalho da venda."
+            
+        id_venda = response_venda.data[0].get("id")
 
-        # 1. Salva a Venda (Independente do status, registramos o evento)
-        # Certifique-se que sua tabela 'vendas' tem a coluna 'status'
-        query_venda = """
-            INSERT INTO vendas (id_operador, valor_total, status) 
-            VALUES (%s, %s, %s) RETURNING id
-        """
-        cursor.execute(query_venda, (id_operador, valor_total, status))
-        id_venda = cursor.fetchone()[0]
-
-        # 2. Lógica Condicional: Só mexe em itens e estoque se for CONCLUÍDA
+        # 2. LÓGICA CONDICIONAL: Só processa itens e estoque se for CONCLUÍDA
         if status == 'CONCLUIDA' and lista_itens:
-            query_item = """
-                INSERT INTO itens_venda (id_venda, id_produto, quantidade, preco_unitario, subtotal) 
-                VALUES (%s, %s, %s, %s, %s)
-            """
-            query_estoque = "UPDATE produtos SET quantidade = quantidade - %s WHERE id = %s"
-
+            payload_itens = []
+            
+            # Montamos o lote de itens para mandar tudo em uma única viagem de rede
             for item in lista_itens:
-                # Inserção do item vendido
-                cursor.execute(query_item, (id_venda, item['id'], item['qtd'], item['preco'], item['subtotal']))
-                # Baixa física no estoque
-                cursor.execute(query_estoque, (item['qtd'], item['id']))
+                payload_itens.append({
+                    "id_venda": int(id_venda),
+                    "id_produto": int(item['id']),
+                    "quantidade": int(item['qtd']),
+                    "preco_unitario": float(item['preco']),
+                    "subtotal": float(item['subtotal'])
+                })
+                
+                # 📉 BAIXA FÍSICA NO ESTOQUE:
+                # Primeiro pegamos a quantidade atual que está na nuvem
+                prod_atual = supabase_client.table("produtos").select("quantidade").eq("id", item['id']).execute()
+                if prod_atual.data:
+                    qtd_antiga = int(prod_atual.data[0].get("quantidade", 0))
+                    nova_qtd = qtd_antiga - int(item['qtd'])
+                    
+                    # Atualizamos a nova quantidade direto na tabela produtos
+                    supabase_client.table("produtos").update({"quantidade": nova_qtd}).eq("id", item['id']).execute()
 
-        # Se tudo correu bem (mesmo sendo cancelada), confirma no banco
-        conn.commit()
+            # Dispara a inserção em lote de todos os itens da venda de uma vez só!
+            supabase_client.table("itens_venda").insert(payload_itens).execute()
+
+        # 3. REGISTRA LOG DE AUDITORIA GERAL
+        try:
+            registrar_log(
+                cursor=None,
+                acao=f"VENDA_{status}",
+                tabela="vendas",
+                registro_id=id_venda,
+                detalhes=f"Operador ID {id_operador} finalizou venda no valor de R$ {valor_total:.2f} como {status}."
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao gerar log da venda: {log_err}")
+
         return True, id_venda
 
     except Exception as e:
-        if conn:
-            conn.rollback()
+        print(f"❌ Erro crítico ao salvar venda no Supabase: {e}")
         return False, str(e)
-    finally:
-        if conn:
-            cursor.close()
-            conn.close()

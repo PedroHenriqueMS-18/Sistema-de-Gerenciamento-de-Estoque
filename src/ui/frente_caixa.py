@@ -30,7 +30,7 @@ class TelaPDV(ctk.CTkFrame):
 
         # --- 2. ÁREA DE TÍTULO E PRODUTO SELECIONADO ---
         self.title_label = ctk.CTkLabel(self, text="PDV - PONTO DE VENDA", font=("Arial", 32, "bold"))
-        self.title_label.pack(pady=(20, 5)) # Reduzido de 10 para 5 para ganhar espaço
+        self.title_label.pack(pady=(20, 5))
         
         self.product_focus_frame = ctk.CTkFrame(self, fg_color="#333333", height=60)
         self.product_focus_frame.pack(fill="x", padx=40, pady=5)
@@ -50,8 +50,7 @@ class TelaPDV(ctk.CTkFrame):
         self.btn_buscar = ctk.CTkButton(self.entry_frame, text="BUSCAR (Enter)", fg_color=self.accent_color, hover_color="#2980b9", height=50, width=150, font=("Arial", 16, "bold"))
         self.btn_buscar.pack(side="left", padx=(10, 0))
 
-        # --- NOVO: DISPLAY DE DETALHES (TRAVADO PARA NÃO ROUBAR ESPAÇO) ---
-        # height=90 e pack_propagate(False) garantem que o frame não mude de tamanho
+        # --- DISPLAY DE DETALHES FIXO ---
         self.details_frame = ctk.CTkFrame(self, fg_color="#2b2b2b", height=90)
         self.details_frame.pack(fill="x", padx=40, pady=5)
         self.details_frame.pack_propagate(False) 
@@ -93,7 +92,6 @@ class TelaPDV(ctk.CTkFrame):
         headers = ["ÍT.", "CÓDIGO", "DESCRIÇÃO DO PRODUTO", "QTD", "VL. UNIT.", "SUBTOTAL"]
         self.table_weights = [1, 3, 5, 1, 2, 2]
         
-        # Voltamos o master para self.table_frame para ele seguir o mesmo scroll das linhas
         header_row = ctk.CTkFrame(self.table_frame, fg_color="#3d3d3d", corner_radius=0)
         header_row.pack(fill="x", side="top", pady=(0, 5))
         
@@ -106,10 +104,10 @@ class TelaPDV(ctk.CTkFrame):
                 anchor="center"
             )
             lbl.grid(row=0, column=i, sticky="nsew", pady=5)
-            # O segredo do alinhamento vertical é o uniform="column_group"
             header_row.grid_columnconfigure(i, weight=self.table_weights[i], uniform="column_group")
             
-    def adicionar_linha_produto(self, item_num, ean, nome, qtd, valor_unit):
+    def adicionar_linha_produto(self, item_num, ean, nome, qtd, valor_unit, callback_excluir):
+        """Renderiza a linha do produto com escuta ativa para remoção via duplo clique."""
         subtotal = qtd * valor_unit
         cor_linha = "#333333" if item_num % 2 == 0 else "transparent"
         
@@ -134,13 +132,18 @@ class TelaPDV(ctk.CTkFrame):
                 anchor="center"
             )
             lbl.grid(row=0, column=i, sticky="nsew", pady=8)
-            # IMPORTANTE: O uniform deve ser o mesmo nome usado no header ("column_group")
             row_frame.grid_columnconfigure(i, weight=self.table_weights[i], uniform="column_group")
+            
+            # Vincula o duplo clique do label ao índice do array do Python (item_num - 1)
+            lbl.bind("<Double-Button-1>", lambda e, idx=(item_num - 1): callback_excluir(idx))
+        
+        # Vincula também no fundo do frame por garantia
+        row_frame.bind("<Double-Button-1>", lambda e, idx=(item_num - 1): callback_excluir(idx))
 
         self.update_idletasks()
         self.table_frame._parent_canvas.yview_moveto(1.0)
 
-    def create_shortcut_buttons(self, comandos_map={}): # Adicionamos o parâmetro
+    def create_shortcut_buttons(self, comandos_map={}): 
         shortcuts = [
             ("F1\nPesquisar", self.accent_color, "F1"),
             ("F2\nNova Venda", self.accent_color, "F2"),
@@ -151,18 +154,17 @@ class TelaPDV(ctk.CTkFrame):
             ("F12\nFechar Caixa", "#c0392b", "F12")
         ]
         
-        # Limpa botões antigos se houver
         for btn in self.botoes_atalho:
             btn.destroy()
         self.botoes_atalho = []
 
         for i, (text, color, tecla) in enumerate(shortcuts):
-            acao = comandos_map.get(tecla) # Busca a função no dicionário
+            acao = comandos_map.get(tecla)
             
             btn = ctk.CTkButton(
                 self.shortcuts_frame, 
                 text=text, 
-                command=acao, # Atribui a função
+                command=acao, 
                 fg_color="transparent", 
                 border_width=2, 
                 border_color=color, 

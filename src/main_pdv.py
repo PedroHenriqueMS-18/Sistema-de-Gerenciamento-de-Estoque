@@ -21,15 +21,15 @@ class MainPDV(ctk.CTk):
         self.caixa_aberto = False
         self.quantidade_atual = 1.0
         self.total_venda = 0.0
-        self.itens_venda = []  # <<< CORREÇÃO 1: Faltava inicializar esta lista aqui!
+        self.itens_venda = []  
 
         self.interface = TelaPDV(master=self)
         self.interface.pack(fill="both", expand=True)
 
         self.meus_atalhos = {
-        "F5": self.finalizar_venda,
-        "F6": self.cancelar_venda_atual,
-        "F12": self.confirmar_fechamento
+            "F5": self.finalizar_venda,
+            "F6": self.cancelar_venda_atual,
+            "F12": self.confirmar_fechamento
         }
         self.interface.create_shortcut_buttons(self.meus_atalhos)
 
@@ -40,24 +40,12 @@ class MainPDV(ctk.CTk):
         self.after(500, self.disparar_abertura)
 
     def configurar_binds(self):
-        # 1. Binds específicos que já existiam
-        # F2 para abertura (usando bind_all para garantir que funcione de qualquer lugar)
         self.bind_all("<F2>", lambda e: self.disparar_abertura())
-        
-        # Enter no campo de código de barras
         self.interface.entry_barcode.bind("<Return>", self.processar_item)
-        
-        # Botão buscar (já configurado no seu código)
         self.interface.btn_buscar.configure(command=self.processar_item)
-        
-        # Detectar o multiplicador (ex: 2*789...)
         self.interface.entry_barcode.bind("<KeyRelease>", self.detectar_multiplicador)
 
-        # 2. Loop Dinâmico para os Atalhos do Dicionário (F5, F6, F12, etc.)
-        # Isso evita que você precise fazer um self.bind para cada tecla manualmente.
         for tecla, funcao in self.meus_atalhos.items():
-            # Usamos bind_all para que o F5 funcione mesmo se o cursor estiver no Entry
-            # f=funcao garante que o loop não 'perca' a referência da função correta
             self.bind_all(f"<{tecla}>", lambda e, f=funcao: f())
 
     def detectar_multiplicador(self, event):
@@ -87,55 +75,84 @@ class MainPDV(ctk.CTk):
 
         if produto:
             id_prod, cod_ean, nome, preco_unit, estoque = produto
-            # Mantemos preco_unit como FLOAT para todas as contas
             preco_unit = float(preco_unit)
 
-            # Cálculo do subtotal (Número * Número = Sucesso)
             subtotal_item = preco_unit * self.quantidade_atual
-            
-            # Criamos variáveis de EXIBIÇÃO (apenas para a interface)
-            # Aqui já podemos colocar a vírgula brasileira!
             preco_unit_exibir = f"{preco_unit:.2f}".replace('.', ',')
 
-            # --- ATUALIZAÇÃO DA INTERFACE ---
             self.interface.lbl_foco_produto.configure(text=f"PRODUTO: {nome}")
-            # Usamos a variável de EXIBIÇÃO no label
             self.interface.lbl_unit_display.configure(text=f"R$ {preco_unit_exibir}")
 
-            # Chama a função visual (Passamos o PREÇO PURO para ela fazer o cálculo lá dentro)
-            self.interface.adicionar_linha_produto(
-                item_num=len(self.itens_venda) + 1,
-                ean=cod_ean,
-                nome=nome,
-                qtd=self.quantidade_atual,
-                valor_unit=preco_unit # <-- Passa o float aqui!
-            )
-
-            # Atualiza o acumulador e o label de total
-            self.total_venda += subtotal_item
-            total_texto = f"{self.total_venda:.2f}"
-            total_exibicao = total_texto.replace('.', ',')
-            self.interface.lbl_total.configure(text=f"TOTAL: R$ {total_exibicao}")
-
-            # Guarda na lista
+            # Registra no cache antes do desenho em tela
             self.itens_venda.append({
                 "id": id_prod,
+                "ean": cod_ean, 
                 "nome": nome,
                 "qtd": self.quantidade_atual,
                 "preco": preco_unit,
                 "subtotal": subtotal_item
             })
 
+            # Injeta o método 'self.excluir_item_venda' como escuta da linha
+            self.interface.adicionar_linha_produto(
+                item_num=len(self.itens_venda),
+                ean=cod_ean,
+                nome=nome,
+                qtd=self.quantidade_atual,
+                valor_unit=preco_unit,
+                callback_excluir=self.excluir_item_venda
+            )
+
+            self.total_venda += subtotal_item
+            self.interface.lbl_total.configure(text=f"TOTAL: R$ {f'{self.total_venda:.2f}'.replace('.', ',')}")
+
         else:
             messagebox.showwarning("Atenção", f"Código {ean} não localizado!")
 
-        # Reset automático
         self.quantidade_atual = 1.0
         self.interface.lbl_qtd_display.configure(text="1")
         self.interface.entry_barcode.delete(0, 'end')
         self.interface.entry_barcode.focus()
 
-    # (disparar_abertura, finalizar_abertura, etc permanecem iguais...)
+    def excluir_item_venda(self, indice_alvo):
+        """Remove o item do array lógico por índice e força o redesenho sequencial da tabela."""
+        if indice_alvo >= len(self.itens_venda):
+            return
+
+        item = self.itens_venda[indice_alvo]
+        pergunta = f"Deseja remover o item {item['nome']} da venda atual?"
+        
+        if messagebox.askyesno("Remover Item", pergunta):
+            # Abate o subtotal do item removido do totalizador geral da venda
+            self.total_venda -= item['subtotal']
+            if self.total_venda < 0: 
+                self.total_venda = 0.0
+                
+            # Remove da lista encadeada do Python
+            self.itens_venda.pop(indice_alvo)
+            
+            self.interface.lbl_total.configure(text=f"TOTAL: R$ {f'{self.total_venda:.2f}'.replace('.', ',')}")
+            
+            # --- REDESENHO DA MÁQUINA DE COMPONENTES ---
+            # Remove todas as linhas visuais preservando apenas os cabeçalhos fixos
+            for widget in self.interface.table_frame.winfo_children():
+                if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") != "#3d3d3d":
+                    widget.destroy()
+            
+            # Re-renderiza os itens restantes reconstruindo a numeração (001, 002, 003...)
+            for i, restante in enumerate(self.itens_venda):
+                self.interface.adicionar_linha_produto(
+                    item_num=i + 1,
+                    ean=restante['ean'],
+                    nome=restante['nome'],
+                    qtd=restante['qtd'],
+                    valor_unit=restante['preco'],
+                    callback_excluir=self.excluir_item_venda
+                )
+            
+            messagebox.showinfo("Sucesso", "Item removido com sucesso!")
+            self.interface.entry_barcode.focus()
+
     def disparar_abertura(self):
         if not self.caixa_aberto:
             modal = ModalAbertura(master=self, ao_confirmar=self.finalizar_abertura)
@@ -149,7 +166,7 @@ class MainPDV(ctk.CTk):
         self.interface.atualizar_status_caixa(aberto=True)
 
     def confirmar_fechamento(self):
-        if messagebox.askyesno("Sair", "Deseja realmente fechar?"):
+        if messagebox.askyesno("Sair", "Deseja realmente fechar o Frente de Caixa?"):
             self.destroy()
 
     def finalizar_venda(self):
@@ -157,7 +174,6 @@ class MainPDV(ctk.CTk):
             messagebox.showwarning("Atenção", "Não há itens na venda!")
             return
 
-        # Abre o modal de pagamento passando o total e a função de retorno
         ModalPagamento(
             master=self, 
             total_venda=self.total_venda, 
@@ -165,17 +181,12 @@ class MainPDV(ctk.CTk):
         )
 
     def concluir_venda_banco(self, id_forma, troco):
-        # Pergunta de Segurança (O MessageBox solicitado!)
         if messagebox.askyesno("Confirmar Venda", f"Deseja realmente registrar esta venda?"):
-            from utils.pdv_service import salvar_venda_geral
-            
-            sucesso, resultado = salvar_venda_geral(
+            sucesso, resultado = salvar_venda(
                 id_operador=UsuarioSessao.id,
                 valor_total=self.total_venda,
                 lista_itens=self.itens_venda,
-                status='CONCLUIDA',
-                id_forma_pagamento=id_forma, # <- Enviando a forma capturada
-                troco=troco                  # <- Enviando o troco calculado
+                status='CONCLUIDA'
             )
 
             if sucesso:
@@ -185,35 +196,32 @@ class MainPDV(ctk.CTk):
                 messagebox.showerror("Erro", f"Erro crítico ao salvar no banco: {resultado}")
                 
     def cancelar_venda_atual(self):
-        if not self.itens_venda: return
+        if not self.itens_venda: 
+            return
         
-        if messagebox.askyesno("Confirmar", "Deseja cancelar esta venda?"):
+        if messagebox.askyesno("Confirmar", "Deseja realmente CANCELAR esta venda em andamento?"):
             sucesso, resultado = salvar_venda(
                 id_operador=UsuarioSessao.id,
                 valor_total=self.total_venda,
-                lista_itens=None, # Não precisamos gravar itens de venda cancelada
+                lista_itens=None, 
                 status='CANCELADA'
             )
 
             if sucesso:
-                messagebox.showwarning("Aviso", f"Venda #{resultado} cancelada e registrada.")
+                messagebox.showwarning("Aviso", f"Venda #{resultado} cancelada e registrada para auditoria.")
                 self.limpar_caixa_pos_venda()
 
     def limpar_caixa_pos_venda(self):
-        # Reseta variáveis lógicas
         self.itens_venda = []
         self.total_venda = 0.0
         self.quantidade_atual = 1.0
         
-        # Reseta a Interface
         self.interface.lbl_total.configure(text="TOTAL: R$ 0,00")
         self.interface.lbl_foco_produto.configure(text="Produto Selecionado: NENHUM")
         self.interface.lbl_unit_display.configure(text="R$ 0,00")
         self.interface.lbl_qtd_display.configure(text="1")
         
-        # Limpa a tabela visual (remove as linhas)
         for widget in self.interface.table_frame.winfo_children():
-            # Não apaga o cabeçalho (que é o primeiro widget)
             if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") != "#3d3d3d":
                 widget.destroy()
                 
