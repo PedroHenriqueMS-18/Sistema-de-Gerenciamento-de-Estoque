@@ -1,5 +1,5 @@
 # utils/logs_service.py
-from config.supabase_client import supabase  # Certifique-se de que o caminho do seu cliente está correto
+from utils.auth import supabase_client as supabase  # Certifique-se de que o caminho do seu cliente está correto
 
 def registrar_log(acao, tabela, registro_id=None, detalhes=None):
     """
