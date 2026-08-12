@@ -5,6 +5,7 @@ from utils.auth import UsuarioSessao
 from ui.components.modal_abertura import ModalAbertura
 from ui.components.modal_pag import ModalPagamento
 from ui.components.modal_pesquisa_produto import ModalPesquisaProduto
+from ui.components.modal_remocao_produto import ModalRemocaoProduto
 from tkinter import messagebox
 from utils.pdv_service import buscar_produto_por_ean, salvar_venda
 import sys
@@ -29,6 +30,7 @@ class MainPDV(ctk.CTk):
 
         self.meus_atalhos = {
             "F1": self.abrir_pesquisa_produto,
+            "F2": self.abrir_remocao_produto,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
             "F12": self.confirmar_fechamento
@@ -42,7 +44,6 @@ class MainPDV(ctk.CTk):
         self.after(500, self.disparar_abertura)
 
     def configurar_binds(self):
-        self.bind_all("<F2>", lambda e: self.disparar_abertura())
         self.interface.entry_barcode.bind("<Return>", self.processar_item)
         self.interface.btn_buscar.configure(command=self.processar_item)
         self.interface.entry_barcode.bind("<KeyRelease>", self.detectar_multiplicador)
@@ -131,6 +132,18 @@ class MainPDV(ctk.CTk):
             return
 
         ModalPesquisaProduto(master=self, ao_selecionar=self.processar_produto_selecionado)
+
+    def abrir_remocao_produto(self):
+        """Abre o modal de remoção de produtos da venda atual (F2)."""
+        if not self.caixa_aberto:
+            messagebox.showwarning("Atenção", "Abra o caixa antes de remover produtos!")
+            return
+
+        if not self.itens_venda:
+            messagebox.showwarning("Atenção", "Não há produtos na venda atual para remover!")
+            return
+
+        ModalRemocaoProduto(master=self, callback_remover=self.excluir_item_venda)
 
     def processar_produto_selecionado(self, produto):
         """Callback do modal de pesquisa (F1): adiciona o produto escolhido à venda atual."""
