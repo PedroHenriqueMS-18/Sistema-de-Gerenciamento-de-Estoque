@@ -32,6 +32,48 @@ def buscar_produto_por_ean(codigo_ean):
         print(f"❌ ERRO AO BUSCAR PRODUTO POR EAN NO SUPABASE: {e}")
         return None
 
+def buscar_produtos_pdv(termo_busca, limite=50):
+    """
+    Pesquisa produtos ativos no Supabase pelo código de barras (EAN) OU pelo nome/descrição.
+    Utilizada pela tela de pesquisa do PDV (F1). Retorna uma lista de tuplas no mesmo
+    formato de 'buscar_produto_por_ean': (id, cod_ean, nome, preco, quantidade).
+    """
+    try:
+        termo = str(termo_busca).strip()
+        if not termo:
+            return []
+
+        # Usamos .or_() para localizar o termo tanto no código de barras quanto no nome
+        # em uma única viagem ao banco, sem precisar disparar duas queries separadas
+        filtro_or = f"cod_ean.ilike.%{termo}%,nome.ilike.%{termo}%"
+
+        response = supabase_client.table("produtos")\
+            .select("id, cod_ean, nome, preco, quantidade")\
+            .eq("ativo", True)\
+            .or_(filtro_or)\
+            .order("nome", desc=False)\
+            .limit(limite)\
+            .execute()
+
+        dados = response.data if response.data else []
+
+        # Devolvemos os dados formatados em tupla para manter compatibilidade com a UI do PDV
+        lista_tuplas = []
+        for item in dados:
+            lista_tuplas.append((
+                item.get("id"),
+                item.get("cod_ean"),
+                item.get("nome"),
+                float(item.get("preco", 0.0)),
+                int(item.get("quantidade", 0))
+            ))
+        return lista_tuplas
+
+    except Exception as e:
+        print(f"❌ ERRO AO PESQUISAR PRODUTOS NO SUPABASE (PDV): {e}")
+        return []
+
+
 def salvar_venda(id_operador, valor_total, lista_itens=None, status='CONCLUIDA'):
     """
     Função híbrida para o Supabase: 

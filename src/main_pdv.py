@@ -4,6 +4,7 @@ from ui.login import LoginWindow
 from utils.auth import UsuarioSessao
 from ui.components.modal_abertura import ModalAbertura
 from ui.components.modal_pag import ModalPagamento
+from ui.components.modal_pesquisa_produto import ModalPesquisaProduto
 from tkinter import messagebox
 from utils.pdv_service import buscar_produto_por_ean, salvar_venda
 import sys
@@ -27,6 +28,7 @@ class MainPDV(ctk.CTk):
         self.interface.pack(fill="both", expand=True)
 
         self.meus_atalhos = {
+            "F1": self.abrir_pesquisa_produto,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
             "F12": self.confirmar_fechamento
@@ -74,40 +76,65 @@ class MainPDV(ctk.CTk):
         produto = buscar_produto_por_ean(ean)
 
         if produto:
-            id_prod, cod_ean, nome, preco_unit, estoque = produto
-            preco_unit = float(preco_unit)
-
-            subtotal_item = preco_unit * self.quantidade_atual
-            preco_unit_exibir = f"{preco_unit:.2f}".replace('.', ',')
-
-            self.interface.lbl_foco_produto.configure(text=f"PRODUTO: {nome}")
-            self.interface.lbl_unit_display.configure(text=f"R$ {preco_unit_exibir}")
-
-            # Registra no cache antes do desenho em tela
-            self.itens_venda.append({
-                "id": id_prod,
-                "ean": cod_ean, 
-                "nome": nome,
-                "qtd": self.quantidade_atual,
-                "preco": preco_unit,
-                "subtotal": subtotal_item
-            })
-
-            # Injeta o método 'self.excluir_item_venda' como escuta da linha
-            self.interface.adicionar_linha_produto(
-                item_num=len(self.itens_venda),
-                ean=cod_ean,
-                nome=nome,
-                qtd=self.quantidade_atual,
-                valor_unit=preco_unit,
-                callback_excluir=self.excluir_item_venda
-            )
-
-            self.total_venda += subtotal_item
-            self.interface.lbl_total.configure(text=f"TOTAL: R$ {f'{self.total_venda:.2f}'.replace('.', ',')}")
-
+            self.adicionar_produto_a_venda(produto)
         else:
             messagebox.showwarning("Atenção", f"Código {ean} não localizado!")
+
+        self.quantidade_atual = 1.0
+        self.interface.lbl_qtd_display.configure(text="1")
+        self.interface.entry_barcode.delete(0, 'end')
+        self.interface.entry_barcode.focus()
+
+    def adicionar_produto_a_venda(self, produto):
+        """
+        Aplica na venda atual um produto já localizado, seja pela leitura direta
+        do código de barras (F1 do teclado físico/bipador) ou pela seleção feita
+        no modal de pesquisa (F1 do sistema). Mantém a mesma tupla de retorno de
+        'buscar_produto_por_ean': (id, cod_ean, nome, preco, quantidade).
+        """
+        id_prod, cod_ean, nome, preco_unit, estoque = produto
+        preco_unit = float(preco_unit)
+
+        subtotal_item = preco_unit * self.quantidade_atual
+        preco_unit_exibir = f"{preco_unit:.2f}".replace('.', ',')
+
+        self.interface.lbl_foco_produto.configure(text=f"PRODUTO: {nome}")
+        self.interface.lbl_unit_display.configure(text=f"R$ {preco_unit_exibir}")
+
+        # Registra no cache antes do desenho em tela
+        self.itens_venda.append({
+            "id": id_prod,
+            "ean": cod_ean,
+            "nome": nome,
+            "qtd": self.quantidade_atual,
+            "preco": preco_unit,
+            "subtotal": subtotal_item
+        })
+
+        # Injeta o método 'self.excluir_item_venda' como escuta da linha
+        self.interface.adicionar_linha_produto(
+            item_num=len(self.itens_venda),
+            ean=cod_ean,
+            nome=nome,
+            qtd=self.quantidade_atual,
+            valor_unit=preco_unit,
+            callback_excluir=self.excluir_item_venda
+        )
+
+        self.total_venda += subtotal_item
+        self.interface.lbl_total.configure(text=f"TOTAL: R$ {f'{self.total_venda:.2f}'.replace('.', ',')}")
+
+    def abrir_pesquisa_produto(self):
+        """Abre o modal de pesquisa de produtos (F1) por código de barras ou nome."""
+        if not self.caixa_aberto:
+            messagebox.showwarning("Atenção", "Abra o caixa antes de pesquisar produtos!")
+            return
+
+        ModalPesquisaProduto(master=self, ao_selecionar=self.processar_produto_selecionado)
+
+    def processar_produto_selecionado(self, produto):
+        """Callback do modal de pesquisa (F1): adiciona o produto escolhido à venda atual."""
+        self.adicionar_produto_a_venda(produto)
 
         self.quantidade_atual = 1.0
         self.interface.lbl_qtd_display.configure(text="1")

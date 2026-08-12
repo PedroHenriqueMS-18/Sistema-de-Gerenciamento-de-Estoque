@@ -146,9 +146,9 @@ class TelaPDV(ctk.CTkFrame):
     def create_shortcut_buttons(self, comandos_map={}): 
         shortcuts = [
             ("F1\nPesquisar", self.accent_color, "F1"),
-            ("F2\nNova Venda", self.accent_color, "F2"),
+            ("F2\nRem. Item", self.accent_color, "F2"),
             ("F3\nCliente CPF", self.accent_color, "F3"),
-            ("F4\nQuantidade", self.accent_color, "F4"),
+            ("F4\nSangria", self.accent_color, "F4"),
             ("F5\nFinalizar/NFC-e", self.success_color, "F5"),
             ("F6\nCancelar Venda", "#e74c3c", "F6"),
             ("F12\nFechar Caixa", "#c0392b", "F12")
