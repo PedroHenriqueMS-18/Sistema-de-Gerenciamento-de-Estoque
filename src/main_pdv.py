@@ -6,6 +6,7 @@ from ui.components.modal_abertura import ModalAbertura
 from ui.components.modal_pag import ModalPagamento
 from ui.components.modal_pesquisa_produto import ModalPesquisaProduto
 from ui.components.modal_remocao_produto import ModalRemocaoProduto
+from ui.components.modal_cliente_cpf import ModalClienteCPF
 from tkinter import messagebox
 from utils.pdv_service import buscar_produto_por_ean, salvar_venda
 import sys
@@ -23,7 +24,8 @@ class MainPDV(ctk.CTk):
         self.caixa_aberto = False
         self.quantidade_atual = 1.0
         self.total_venda = 0.0
-        self.itens_venda = []  
+        self.itens_venda = []
+        self.cpf_cliente = None  # Guardado apenas em memória; usado na impressão da notinha
 
         self.interface = TelaPDV(master=self)
         self.interface.pack(fill="both", expand=True)
@@ -31,6 +33,7 @@ class MainPDV(ctk.CTk):
         self.meus_atalhos = {
             "F1": self.abrir_pesquisa_produto,
             "F2": self.abrir_remocao_produto,
+            "F3": self.abrir_cliente_cpf,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
             "F12": self.confirmar_fechamento
@@ -145,6 +148,24 @@ class MainPDV(ctk.CTk):
 
         ModalRemocaoProduto(master=self, callback_remover=self.excluir_item_venda)
 
+    def abrir_cliente_cpf(self):
+        """Abre o modal de identificação do cliente por CPF (F3)."""
+        if not self.caixa_aberto:
+            messagebox.showwarning("Atenção", "Abra o caixa antes de identificar o cliente!")
+            return
+
+        ModalClienteCPF(master=self, cpf_atual=self.cpf_cliente, ao_salvar=self.definir_cpf_cliente)
+
+    def definir_cpf_cliente(self, cpf):
+        """
+        Callback do modal de CPF (F3). Guarda o CPF apenas em memória, vinculado
+        à venda em andamento — será usado na impressão da notinha ao finalizar
+        a venda (funcionalidade futura). Não é persistido no banco.
+        """
+        self.cpf_cliente = cpf
+        self.interface.atualizar_cliente_cpf(cpf)
+        self.interface.entry_barcode.focus()
+
     def processar_produto_selecionado(self, produto):
         """Callback do modal de pesquisa (F1): adiciona o produto escolhido à venda atual."""
         self.adicionar_produto_a_venda(produto)
@@ -255,11 +276,13 @@ class MainPDV(ctk.CTk):
         self.itens_venda = []
         self.total_venda = 0.0
         self.quantidade_atual = 1.0
+        self.cpf_cliente = None
         
         self.interface.lbl_total.configure(text="TOTAL: R$ 0,00")
         self.interface.lbl_foco_produto.configure(text="Produto Selecionado: NENHUM")
         self.interface.lbl_unit_display.configure(text="R$ 0,00")
         self.interface.lbl_qtd_display.configure(text="1")
+        self.interface.atualizar_cliente_cpf(None)
         
         for widget in self.interface.table_frame.winfo_children():
             if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") != "#3d3d3d":

@@ -24,7 +24,10 @@ class TelaPDV(ctk.CTkFrame):
         
         self.lbl_operador = ctk.CTkLabel(self.header_frame, text="OPERADOR: ", font=("Arial", 16))
         self.lbl_operador.pack(side="left", padx=50)
-        
+
+        self.lbl_cliente = ctk.CTkLabel(self.header_frame, text="CLIENTE: NÃO INFORMADO", font=("Arial", 14), text_color="gray")
+        self.lbl_cliente.pack(side="left", padx=(0, 20))
+
         self.status_indicador = ctk.CTkLabel(self.header_frame, text="● CAIXA: ", font=("Arial", 16, "bold"))
         self.status_indicador.pack(side="right", padx=20)
 
@@ -176,6 +179,13 @@ class TelaPDV(ctk.CTkFrame):
             self.shortcuts_frame.grid_columnconfigure(i, weight=1)
             self.botoes_atalho.append(btn)
 
+    def atualizar_cliente_cpf(self, cpf=None):
+        """Atualiza o indicador de cliente no cabeçalho com o CPF vinculado à venda atual."""
+        if cpf:
+            self.lbl_cliente.configure(text=f"CLIENTE: {cpf}", text_color=self.accent_color)
+        else:
+            self.lbl_cliente.configure(text="CLIENTE: NÃO INFORMADO", text_color="gray")
+
     def atualizar_status_caixa(self, aberto=False):
         if aberto:
             self.status_indicador.configure(text="● CAIXA: ABERTO", text_color=self.success_color)
@@ -190,6 +200,7 @@ class TelaPDV(ctk.CTkFrame):
             self.lbl_total.configure(text="TOTAL: R$ 0,00")
             self.lbl_qtd_display.configure(text="1")
             self.lbl_unit_display.configure(text="R$ 0,00")
+            self.atualizar_cliente_cpf(None)
             
             self.entry_barcode.delete(0, 'end')
             self.entry_barcode.configure(state="disabled", fg_color="#1a1a1a")
