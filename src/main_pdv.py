@@ -7,8 +7,16 @@ from ui.components.modal_pag import ModalPagamento
 from ui.components.modal_pesquisa_produto import ModalPesquisaProduto
 from ui.components.modal_remocao_produto import ModalRemocaoProduto
 from ui.components.modal_cliente_cpf import ModalClienteCPF
+from ui.components.modal_sangria import ModalSangria
 from tkinter import messagebox
-from utils.pdv_service import buscar_produto_por_ean, salvar_venda
+from utils.pdv_service import (
+    buscar_produto_por_ean,
+    salvar_venda,
+    abrir_sessao_caixa,
+    calcular_saldo_caixa,
+    registrar_movimentacao_caixa,
+    gerar_comprovante_sangria
+)
 import sys
 
 class MainPDV(ctk.CTk):
@@ -26,6 +34,8 @@ class MainPDV(ctk.CTk):
         self.total_venda = 0.0
         self.itens_venda = []
         self.cpf_cliente = None  # Guardado apenas em memória; usado na impressão da notinha
+        self.id_caixa_atual = None  # id da sessão em 'sessoes_caixa'; alimenta vendas e sangrias
+        self.saldo_abertura = 0.0  # Valor de suprimento informado na abertura do caixa
 
         self.interface = TelaPDV(master=self)
         self.interface.pack(fill="both", expand=True)
@@ -34,6 +44,7 @@ class MainPDV(ctk.CTk):
             "F1": self.abrir_pesquisa_produto,
             "F2": self.abrir_remocao_produto,
             "F3": self.abrir_cliente_cpf,
+            "F4": self.abrir_sangria,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
             "F12": self.confirmar_fechamento
@@ -156,6 +167,59 @@ class MainPDV(ctk.CTk):
 
         ModalClienteCPF(master=self, cpf_atual=self.cpf_cliente, ao_salvar=self.definir_cpf_cliente)
 
+    def abrir_sangria(self):
+        """Abre o modal de Sangria de caixa (F4), já com o saldo real disponível na gaveta."""
+        if not self.caixa_aberto or not self.id_caixa_atual:
+            messagebox.showwarning("Atenção", "Abra o caixa antes de realizar uma sangria!")
+            return
+
+        saldo_disponivel = calcular_saldo_caixa(self.id_caixa_atual, self.saldo_abertura)
+        ModalSangria(master=self, saldo_disponivel=saldo_disponivel, ao_confirmar=self.processar_sangria)
+
+    def processar_sangria(self, valor, motivo):
+        """
+        Callback do modal de Sangria (F4): registra a movimentação em
+        'movimentacoes_caixa' e gera o comprovante em .txt para o operador
+        imprimir/anexar na gaveta.
+        """
+        saldo_antes = calcular_saldo_caixa(self.id_caixa_atual, self.saldo_abertura)
+
+        sucesso, resultado = registrar_movimentacao_caixa(
+            id_caixa=self.id_caixa_atual,
+            id_operador=UsuarioSessao.id,
+            tipo="SANGRIA",
+            valor=valor,
+            observacao=motivo
+        )
+
+        if not sucesso:
+            messagebox.showerror("Erro", f"Não foi possível registrar a sangria: {resultado}")
+            return
+
+        id_movimentacao = resultado
+        saldo_depois = saldo_antes - valor
+        valor_exibir = f"{valor:.2f}".replace('.', ',')
+
+        caminho_comprovante = gerar_comprovante_sangria(
+            id_movimentacao=id_movimentacao,
+            id_caixa=self.id_caixa_atual,
+            operador_nome=UsuarioSessao.nome,
+            valor=valor,
+            observacao=motivo,
+            saldo_antes=saldo_antes,
+            saldo_depois=saldo_depois
+        )
+
+        if caminho_comprovante:
+            messagebox.showinfo(
+                "Sangria Registrada",
+                f"Sangria de R$ {valor_exibir} registrada com sucesso!\n\nComprovante salvo em:\n{caminho_comprovante}"
+            )
+        else:
+            messagebox.showinfo("Sangria Registrada", f"Sangria de R$ {valor_exibir} registrada com sucesso!")
+
+        self.interface.entry_barcode.focus()
+
     def definir_cpf_cliente(self, cpf):
         """
         Callback do modal de CPF (F3). Guarda o CPF apenas em memória, vinculado
@@ -223,6 +287,19 @@ class MainPDV(ctk.CTk):
             messagebox.showinfo("Aviso", "O caixa já está aberto!")
 
     def finalizar_abertura(self, valor):
+        """
+        Callback do ModalAbertura: registra a sessão em 'sessoes_caixa' no Supabase
+        antes de destravar o PDV. Sem um id_caixa válido, a Sangria não pode funcionar
+        (a tabela movimentacoes_caixa exige essa referência).
+        """
+        id_caixa = abrir_sessao_caixa(id_operador=UsuarioSessao.id, valor_abertura=valor)
+
+        if not id_caixa:
+            messagebox.showerror("Erro", "Não foi possível abrir o caixa no banco de dados. Tente novamente.")
+            return False
+
+        self.id_caixa_atual = id_caixa
+        self.saldo_abertura = valor
         self.caixa_aberto = True
         self.interface.atualizar_status_caixa(aberto=True)
 
@@ -246,8 +323,11 @@ class MainPDV(ctk.CTk):
             sucesso, resultado = salvar_venda(
                 id_operador=UsuarioSessao.id,
                 valor_total=self.total_venda,
+                id_caixa=self.id_caixa_atual,
                 lista_itens=self.itens_venda,
-                status='CONCLUIDA'
+                status='CONCLUIDA',
+                id_forma_pagamento=id_forma,
+                troco=troco
             )
 
             if sucesso:
@@ -264,6 +344,7 @@ class MainPDV(ctk.CTk):
             sucesso, resultado = salvar_venda(
                 id_operador=UsuarioSessao.id,
                 valor_total=self.total_venda,
+                id_caixa=self.id_caixa_atual,
                 lista_itens=None, 
                 status='CANCELADA'
             )

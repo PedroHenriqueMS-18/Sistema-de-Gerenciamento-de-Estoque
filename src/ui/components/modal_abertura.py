@@ -45,9 +45,10 @@ class ModalAbertura(ctk.CTkToplevel):
         try:
             valor_float = float(valor_str) if valor_str else 0.0
             
-            # 1. Aqui chamaremos a função para salvar no banco (depois)
-            # 2. Chama o callback para destravar o PDV
-            self.ao_confirmar(valor_float)
-            self.destroy()
+            # Chama o callback que salva a abertura no banco e destrava o PDV.
+            # Só fecha o modal se o callback não sinalizar falha (retorno False)
+            resultado = self.ao_confirmar(valor_float)
+            if resultado is not False:
+                self.destroy()
         except ValueError:
             messagebox.showwarning("Erro", "Por favor, insira um valor numérico válido!")

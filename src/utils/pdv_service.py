@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 from utils.auth import supabase_client
 from utils.logger import registrar_log
 
@@ -74,11 +76,13 @@ def buscar_produtos_pdv(termo_busca, limite=50):
         return []
 
 
-def salvar_venda(id_operador, valor_total, lista_itens=None, status='CONCLUIDA'):
+def salvar_venda(id_operador, valor_total, id_caixa=None, lista_itens=None, status='CONCLUIDA', id_forma_pagamento=None, troco=0.0):
     """
     Função híbrida para o Supabase: 
     - Se status='CONCLUIDA': Salva venda, insere itens em lote e baixa estoque de cada um.
     - Se status='CANCELADA': Salva apenas o cabeçalho da venda para auditoria de caixa.
+    'id_caixa' vincula a venda à sessão de caixa aberta (tabela sessoes_caixa), permitindo
+    calcular quanto dinheiro físico entrou na gaveta durante o expediente (uso na Sangria).
     """
     try:
         # 1. SALVA O CABEÇALHO DA VENDA
@@ -87,6 +91,13 @@ def salvar_venda(id_operador, valor_total, lista_itens=None, status='CONCLUIDA')
             "valor_total": float(valor_total),
             "status": status
         }
+
+        if id_caixa is not None:
+            payload_venda["id_caixa"] = int(id_caixa)
+        if id_forma_pagamento is not None:
+            payload_venda["id_forma_pagamento"] = int(id_forma_pagamento)
+        if troco:
+            payload_venda["troco"] = float(troco)
         
         response_venda = supabase_client.table("vendas").insert(payload_venda).execute()
         
@@ -139,3 +150,153 @@ def salvar_venda(id_operador, valor_total, lista_itens=None, status='CONCLUIDA')
     except Exception as e:
         print(f"❌ Erro crítico ao salvar venda no Supabase: {e}")
         return False, str(e)
+
+
+def abrir_sessao_caixa(id_operador, valor_abertura):
+    """
+    Registra a abertura do caixa no Supabase (tabela sessoes_caixa) e devolve o 'id'
+    gerado. Esse id passa a identificar a sessão em todas as movimentações seguintes
+    (vendas, sangrias e suprimentos) até o fechamento do caixa.
+    Retorna None em caso de falha.
+    """
+    try:
+        payload = {
+            "id_operador": int(id_operador),
+            "valor_abertura": float(valor_abertura),
+            "status": "ABERTO"
+        }
+
+        response = supabase_client.table("sessoes_caixa").insert(payload).execute()
+
+        if response.data:
+            return response.data[0].get("id")
+        return None
+
+    except Exception as e:
+        print(f"❌ Erro ao abrir sessão de caixa no Supabase: {e}")
+        return None
+
+
+def calcular_saldo_caixa(id_caixa, valor_abertura):
+    """
+    Calcula o dinheiro físico disponível na gaveta para fins de Sangria:
+
+        Dinheiro em Gaveta = Saldo Abertura + Vendas em Dinheiro
+                              + Suprimentos - Sangrias Anteriores
+
+    ⚠️ Regra de Ouro: vendas em Cartão de Crédito/Débito ou PIX (id_forma_pagamento
+    diferente de 1) NÃO entram nesse cálculo, pois esse dinheiro nunca passa pela gaveta.
+    """
+    try:
+        # Vendas concluídas em DINHEIRO (id_forma_pagamento = 1) dentro dessa sessão de caixa
+        vendas_dinheiro = supabase_client.table("vendas")\
+            .select("valor_total")\
+            .eq("id_caixa", int(id_caixa))\
+            .eq("status", "CONCLUIDA")\
+            .eq("id_forma_pagamento", 1)\
+            .execute()
+
+        total_vendas_dinheiro = sum(float(v.get("valor_total", 0)) for v in (vendas_dinheiro.data or []))
+
+        # Sangrias e Suprimentos já lançados nessa sessão de caixa
+        movimentacoes = supabase_client.table("movimentacoes_caixa")\
+            .select("tipo, valor")\
+            .eq("id_caixa", int(id_caixa))\
+            .execute()
+
+        total_suprimentos = sum(float(m.get("valor", 0)) for m in (movimentacoes.data or []) if m.get("tipo") == "SUPRIMENTO")
+        total_sangrias = sum(float(m.get("valor", 0)) for m in (movimentacoes.data or []) if m.get("tipo") == "SANGRIA")
+
+        return float(valor_abertura) + total_vendas_dinheiro + total_suprimentos - total_sangrias
+
+    except Exception as e:
+        print(f"❌ Erro ao calcular saldo do caixa no Supabase: {e}")
+        return 0.0
+
+
+def registrar_movimentacao_caixa(id_caixa, id_operador, tipo, valor, observacao=""):
+    """
+    Registra uma Sangria ou Suprimento na tabela movimentacoes_caixa.
+    'tipo' deve ser 'SANGRIA' ou 'SUPRIMENTO'. Retorna (True, id_movimentacao)
+    em caso de sucesso, ou (False, mensagem_erro) em caso de falha.
+    """
+    try:
+        payload = {
+            "id_caixa": int(id_caixa),
+            "id_operador": int(id_operador),
+            "tipo": tipo,
+            "valor": float(valor),
+            "observacao": observacao.strip() if observacao else None
+        }
+
+        response = supabase_client.table("movimentacoes_caixa").insert(payload).execute()
+
+        if not response.data:
+            return False, "Não foi possível registrar a movimentação de caixa."
+
+        id_movimentacao = response.data[0].get("id")
+
+        try:
+            registrar_log(
+                cursor=None,
+                acao=tipo,
+                tabela="movimentacoes_caixa",
+                registro_id=id_movimentacao,
+                detalhes=f"Operador ID {id_operador} registrou {tipo} de R$ {float(valor):.2f} no caixa #{id_caixa}. Obs: {observacao}"
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao gerar log da movimentação de caixa: {log_err}")
+
+        return True, id_movimentacao
+
+    except Exception as e:
+        print(f"❌ Erro crítico ao registrar movimentação de caixa no Supabase: {e}")
+        return False, str(e)
+
+
+def gerar_comprovante_sangria(id_movimentacao, id_caixa, operador_nome, valor, observacao, saldo_antes, saldo_depois):
+    """
+    Gera o comprovante de sangria em um arquivo .txt, no formato compacto de
+    impressora térmica (~40 colunas). O operador deve imprimir/anexar esse
+    comprovante físico na gaveta, comprovando a retirada até o fechamento do caixa.
+    Retorna o caminho do arquivo gerado, ou None em caso de falha.
+    """
+    try:
+        pasta_comprovantes = os.path.join(os.path.dirname(os.path.dirname(__file__)), "comprovantes")
+        os.makedirs(pasta_comprovantes, exist_ok=True)
+
+        agora = datetime.now()
+        nome_arquivo = f"sangria_{id_movimentacao}_{agora.strftime('%Y%m%d_%H%M%S')}.txt"
+        caminho_completo = os.path.join(pasta_comprovantes, nome_arquivo)
+
+        linhas = [
+            "=" * 40,
+            "COMPROVANTE DE SANGRIA".center(40),
+            "=" * 40,
+            f"Data/Hora: {agora.strftime('%d/%m/%Y %H:%M:%S')}",
+            f"Operador : {operador_nome}",
+            f"Caixa    : #{id_caixa}",
+            f"Mov. Num.: #{id_movimentacao}",
+            "-" * 40,
+            f"VALOR RETIRADO: R$ {valor:.2f}".replace('.', ','),
+            "",
+            "Motivo:",
+            observacao or "(sem observação)",
+            "-" * 40,
+            f"Saldo em gaveta antes : R$ {saldo_antes:.2f}".replace('.', ','),
+            f"Saldo em gaveta depois: R$ {saldo_depois:.2f}".replace('.', ','),
+            "=" * 40,
+            "",
+            "Assinatura do operador:",
+            "_" * 30,
+            "=" * 40,
+        ]
+
+        with open(caminho_completo, "w", encoding="utf-8") as arquivo:
+            arquivo.write("\n".join(linhas))
+
+        return caminho_completo
+
+    except Exception as e:
+        print(f"❌ Erro ao gerar comprovante de sangria: {e}")
+        return None

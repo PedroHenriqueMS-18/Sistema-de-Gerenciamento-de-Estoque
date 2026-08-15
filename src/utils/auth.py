@@ -66,3 +66,32 @@ def verificar_login(usuario_digitado, senha_digitada):
     except Exception as e:
         print(f"❌ Erro crítico na autenticação: {e}")
         return False
+
+
+def verificar_senha_supervisor(usuario_digitado, senha_digitada):
+    """
+    Confere se um usuário/senha pertence a um supervisor (nível 1), SEM alterar
+    a sessão do operador atualmente logado (UsuarioSessao). Usado como trava de
+    segurança em operações sensíveis do PDV, como a Sangria de caixa.
+    """
+    try:
+        response = supabase_client.table("login")\
+            .select("nivel, pass, ativo")\
+            .eq("usuario", usuario_digitado)\
+            .execute()
+
+        if not response.data:
+            return False
+
+        usuario_encontrado = response.data[0]
+
+        # Só autoriza se o usuário informado for realmente um supervisor (nível 1) e estiver ativo
+        if usuario_encontrado.get("nivel") != 1 or usuario_encontrado.get("ativo") is False:
+            return False
+
+        hash_no_banco = usuario_encontrado.get("pass")
+        return bcrypt.checkpw(senha_digitada.encode('utf-8'), hash_no_banco.encode('utf-8'))
+
+    except Exception as e:
+        print(f"❌ Erro ao verificar autorização de supervisor: {e}")
+        return False
