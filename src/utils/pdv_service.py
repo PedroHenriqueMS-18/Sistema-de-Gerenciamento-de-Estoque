@@ -171,7 +171,6 @@ def salvar_venda(id_operador, valor_total, id_caixa=None, lista_itens=None, stat
         # 3. REGISTRA LOG DE AUDITORIA GERAL
         try:
             registrar_log(
-                cursor=None,
                 acao=f"VENDA_{status}",
                 tabela="vendas",
                 registro_id=id_venda,
@@ -362,7 +361,6 @@ def registrar_movimentacao_caixa(id_caixa, id_operador, tipo, valor, observacao=
 
         try:
             registrar_log(
-                cursor=None,
                 acao=tipo,
                 tabela="movimentacoes_caixa",
                 registro_id=id_movimentacao,
