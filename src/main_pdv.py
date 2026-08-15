@@ -8,14 +8,19 @@ from ui.components.modal_pesquisa_produto import ModalPesquisaProduto
 from ui.components.modal_remocao_produto import ModalRemocaoProduto
 from ui.components.modal_cliente_cpf import ModalClienteCPF
 from ui.components.modal_sangria import ModalSangria
+from ui.components.modal_fechamento_caixa import ModalFechamentoCaixa
 from tkinter import messagebox
 from utils.pdv_service import (
     buscar_produto_por_ean,
     salvar_venda,
     abrir_sessao_caixa,
+    fechar_sessao_caixa,
     calcular_saldo_caixa,
+    montar_resumo_fechamento_caixa,
     registrar_movimentacao_caixa,
-    gerar_comprovante_sangria
+    gerar_comprovante_sangria,
+    gerar_comprovante_fechamento,
+    abrir_arquivo
 )
 import sys
 
@@ -26,7 +31,7 @@ class MainPDV(ctk.CTk):
         self.title("Estimaí - Frente de Caixa")
         self.geometry("1200x800")
         self.after(0, lambda: self.state('zoomed'))
-        self.protocol("WM_DELETE_WINDOW", self.confirmar_fechamento)
+        self.protocol("WM_DELETE_WINDOW", self.confirmar_saida_sistema)
 
         # --- VARIÁVEIS DE ESTADO ---
         self.caixa_aberto = False
@@ -34,8 +39,9 @@ class MainPDV(ctk.CTk):
         self.total_venda = 0.0
         self.itens_venda = []
         self.cpf_cliente = None  # Guardado apenas em memória; usado na impressão da notinha
-        self.id_caixa_atual = None  # id da sessão em 'sessoes_caixa'; alimenta vendas e sangrias
+        self.id_caixa_atual = None  # id da sessão em 'sessoes_caixa'; alimenta vendas, sangrias e fechamento
         self.saldo_abertura = 0.0  # Valor de suprimento informado na abertura do caixa
+        self.data_abertura_caixa = None  # Timestamp (ISO) devolvido pelo banco na abertura da sessão
 
         self.interface = TelaPDV(master=self)
         self.interface.pack(fill="both", expand=True)
@@ -47,7 +53,7 @@ class MainPDV(ctk.CTk):
             "F4": self.abrir_sangria,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
-            "F12": self.confirmar_fechamento
+            "F12": self.abrir_fechamento_caixa
         }
         self.interface.create_shortcut_buttons(self.meus_atalhos)
 
@@ -289,23 +295,93 @@ class MainPDV(ctk.CTk):
     def finalizar_abertura(self, valor):
         """
         Callback do ModalAbertura: registra a sessão em 'sessoes_caixa' no Supabase
-        antes de destravar o PDV. Sem um id_caixa válido, a Sangria não pode funcionar
-        (a tabela movimentacoes_caixa exige essa referência).
+        antes de destravar o PDV. Sem um id_caixa válido, nem Sangria nem Fechamento
+        conseguem funcionar (ambos dependem dessa referência).
         """
-        id_caixa = abrir_sessao_caixa(id_operador=UsuarioSessao.id, valor_abertura=valor)
+        sessao = abrir_sessao_caixa(id_operador=UsuarioSessao.id, valor_abertura=valor)
 
-        if not id_caixa:
+        if not sessao:
             messagebox.showerror("Erro", "Não foi possível abrir o caixa no banco de dados. Tente novamente.")
             return False
 
-        self.id_caixa_atual = id_caixa
+        self.id_caixa_atual = sessao.get("id")
+        self.data_abertura_caixa = sessao.get("data_abertura")
         self.saldo_abertura = valor
         self.caixa_aberto = True
         self.interface.atualizar_status_caixa(aberto=True)
 
-    def confirmar_fechamento(self):
+    def confirmar_saida_sistema(self):
+        """Confirmação para fechar o aplicativo (botão X da janela). Não confunda com o
+        Fechamento de Caixa (F12), que é o encerramento contábil do turno."""
         if messagebox.askyesno("Sair", "Deseja realmente fechar o Frente de Caixa?"):
             self.destroy()
+
+    def abrir_fechamento_caixa(self):
+        """Abre o modal de Fechamento de Caixa (F12)."""
+        if not self.caixa_aberto or not self.id_caixa_atual:
+            messagebox.showwarning("Atenção", "Não há um caixa aberto para fechar!")
+            return
+
+        if self.itens_venda:
+            messagebox.showwarning("Atenção", "Finalize ou cancele a venda em andamento antes de fechar o caixa!")
+            return
+
+        ModalFechamentoCaixa(master=self, ao_confirmar=self.processar_fechamento_caixa)
+
+    def processar_fechamento_caixa(self, valor_declarado, observacao):
+        """
+        Callback do modal de Fechamento (F12): calcula a conciliação do dinheiro,
+        marca a sessão como FECHADA no banco, gera o espelho em .txt e abre o
+        arquivo para o operador conferir/imprimir. Depois, bloqueia novas vendas
+        limpando a sessão da memória, até uma nova abertura de caixa.
+        """
+        resumo = montar_resumo_fechamento_caixa(self.id_caixa_atual, self.saldo_abertura)
+
+        if resumo is None:
+            messagebox.showerror("Erro", "Não foi possível calcular a conciliação do caixa. Fechamento cancelado.")
+            return
+
+        diferenca = valor_declarado - resumo["saldo_esperado"]
+
+        sucesso, resultado = fechar_sessao_caixa(
+            id_caixa=self.id_caixa_atual,
+            valor_fechamento=valor_declarado,
+            observacao=observacao
+        )
+
+        if not sucesso:
+            messagebox.showerror("Erro", f"Não foi possível fechar o caixa no banco: {resultado}")
+            return
+
+        caminho_comprovante = gerar_comprovante_fechamento(
+            id_caixa=self.id_caixa_atual,
+            operador_nome=UsuarioSessao.nome,
+            data_abertura=self.data_abertura_caixa,
+            resumo=resumo,
+            valor_declarado=valor_declarado,
+            diferenca=diferenca,
+            observacao=observacao
+        )
+
+        if caminho_comprovante:
+            abrir_arquivo(caminho_comprovante)
+
+        # --- BLOQUEIA NOVAS VENDAS: limpa a sessão de caixa da memória ---
+        self.id_caixa_atual = None
+        self.saldo_abertura = 0.0
+        self.data_abertura_caixa = None
+        self.caixa_aberto = False
+        self.limpar_caixa_pos_venda()
+        self.interface.atualizar_status_caixa(aberto=False)
+
+        diferenca_exibir = f"{diferenca:+.2f}".replace('.', ',')
+        mensagem = f"Caixa fechado com sucesso!\nDiferença: R$ {diferenca_exibir}"
+        if caminho_comprovante:
+            mensagem += f"\n\nComprovante salvo em:\n{caminho_comprovante}"
+        messagebox.showinfo("Caixa Fechado", mensagem)
+
+        # Assim como no início do sistema, já convida o próximo operador a abrir um novo turno
+        self.after(500, self.disparar_abertura)
 
     def finalizar_venda(self):
         if not self.itens_venda:
