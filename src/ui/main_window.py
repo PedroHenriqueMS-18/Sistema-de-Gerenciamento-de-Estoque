@@ -5,6 +5,7 @@ from ui.components.home import Home
 from utils.auth import UsuarioSessao
 from ui.components.list_users import ListUsers
 from ui.components.list_fornec import ListFornec
+from ui.components.financeiro import Financeiro
 
 class MainWindow(ctk.CTk):
     def __init__(self, db_connection=None):
@@ -47,6 +48,18 @@ class MainWindow(ctk.CTk):
                 command=self.mostrar_usuarios
             )
             self.btn_users.pack(pady=10, padx=20, fill="x")
+
+        # --- BOTÃO CONDICIONAL: FINANCEIRO (Contas a Pagar / a Receber) ---
+        self.btn_financeiro = None
+        if UsuarioSessao.nivel == 1:
+            self.btn_financeiro = ctk.CTkButton(
+                self.sidebar,
+                text="💰 Financeiro",
+                fg_color="#1f538d",
+                hover_color="#14375e",
+                command=self.mostrar_financeiro
+            )
+            self.btn_financeiro.pack(pady=10, padx=20, fill="x")
 
         # --- BOTÃO DE LOGOUT (Fixado no final da sidebar) ---
         self.btn_logout = ctk.CTkButton(
@@ -92,6 +105,8 @@ class MainWindow(ctk.CTk):
         buttons = [self.btn_home, self.btn_prod, self.btn_fornec]
         if self.btn_users:
             buttons.append(self.btn_users)
+        if self.btn_financeiro:
+            buttons.append(self.btn_financeiro)
 
         for btn in buttons:
             if btn == btn_clicked:
@@ -99,7 +114,7 @@ class MainWindow(ctk.CTk):
                 btn.configure(fg_color="#333333", border_width=1, border_color="#f39c12", hover_color="#404040")
             else:
                 # Restaura a cor padrão de cada botão de forma isolada
-                if btn == self.btn_users:
+                if btn in (self.btn_users, self.btn_financeiro):
                      btn.configure(fg_color="#1f538d", border_width=0, hover_color="#14375e")
                 else:
                     btn.configure(fg_color="transparent", border_width=0, hover_color="#2b2b2b")
@@ -132,4 +147,10 @@ class MainWindow(ctk.CTk):
         # 🔧 CORREÇÃO 3: Vinculando a aba ao botão correto para evitar falhas em níveis operacionais
         self.select_aba(self.btn_fornec)
         self.tela = ListFornec(master=self.area_principal)
+        self.tela.pack(fill="both", expand=True)
+
+    def mostrar_financeiro(self):
+        self.clean_screen()
+        self.select_aba(self.btn_financeiro)
+        self.tela = Financeiro(master=self.area_principal)
         self.tela.pack(fill="both", expand=True)
