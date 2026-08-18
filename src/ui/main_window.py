@@ -6,6 +6,7 @@ from utils.auth import UsuarioSessao
 from ui.components.list_users import ListUsers
 from ui.components.list_fornec import ListFornec
 from ui.components.financeiro import Financeiro
+from ui.components.pedidos_compra import PedidosCompra
 
 class MainWindow(ctk.CTk):
     def __init__(self, db_connection=None):
@@ -36,6 +37,10 @@ class MainWindow(ctk.CTk):
         # 🔧 CORREÇÃO 1: Guardando a referência correta do botão de fornecedores na instância (self.btn_fornec)
         self.btn_fornec = ctk.CTkButton(self.sidebar, text="Fornecedores", command=self.mostrar_fornec)
         self.btn_fornec.pack(pady=10, padx=20, fill="x")
+
+        # Visível pra Nível 1 e Nível 2 — igual Estoque/Fornecedores, sem restrição de nível
+        self.btn_compras = ctk.CTkButton(self.sidebar, text="📦 Pedidos de Compra", command=self.mostrar_compras)
+        self.btn_compras.pack(pady=10, padx=20, fill="x")
 
         # --- BOTÃO CONDICIONAL: GESTÃO DE USUÁRIOS ---
         self.btn_users = None 
@@ -102,7 +107,7 @@ class MainWindow(ctk.CTk):
     def select_aba(self, btn_clicked):
         """Gerencia visualmente as cores de ativação das abas laterais da Sidebar."""
         # 🔧 CORREÇÃO 2: Unificando dinamicamente todos os botões no mapeamento de estado visual
-        buttons = [self.btn_home, self.btn_prod, self.btn_fornec]
+        buttons = [self.btn_home, self.btn_prod, self.btn_fornec, self.btn_compras]
         if self.btn_users:
             buttons.append(self.btn_users)
         if self.btn_financeiro:
@@ -153,4 +158,10 @@ class MainWindow(ctk.CTk):
         self.clean_screen()
         self.select_aba(self.btn_financeiro)
         self.tela = Financeiro(master=self.area_principal)
+        self.tela.pack(fill="both", expand=True)
+
+    def mostrar_compras(self):
+        self.clean_screen()
+        self.select_aba(self.btn_compras)
+        self.tela = PedidosCompra(master=self.area_principal)
         self.tela.pack(fill="both", expand=True)

@@ -173,6 +173,48 @@ def marcar_titulo_como_pago(id_titulo, tipo):
         return False
 
 
+def ajustar_valor_titulo(id_titulo, novo_valor):
+    """
+    Ajusta o valor de um título financeiro já existente. Uso restrito e interno: hoje
+    só é chamado pelo módulo de Compras, quando o recebimento de um pedido diverge da
+    quantidade pedida (o boleto do fornecedor reflete o que realmente chegou, calculado
+    como quantidade recebida × custo unitário — não o que foi originalmente pedido).
+    NÃO é uma função de edição geral, e não é exposta na tela de Financeiro: só ajusta
+    se o título ainda estiver PENDENTE, pra nunca sobrescrever uma conta já paga ou
+    cancelada. Retorna (True, None) em sucesso, ou (False, motivo) caso não ajuste.
+    """
+    try:
+        titulo_resp = supabase_client.table("financeiro_titulos").select("status").eq("id", int(id_titulo)).execute()
+
+        if not titulo_resp.data:
+            return False, "Título não encontrado."
+
+        if titulo_resp.data[0].get("status") != "PENDENTE":
+            return False, "O título já foi baixado ou cancelado; o valor não foi alterado."
+
+        response = supabase_client.table("financeiro_titulos").update({"valor": float(novo_valor)}).eq("id", int(id_titulo)).execute()
+
+        if not response.data:
+            return False, "Não foi possível ajustar o valor do título."
+
+        try:
+            registrar_log(
+                acao="AJUSTE_VALOR_TITULO",
+                tabela="financeiro_titulos",
+                registro_id=id_titulo,
+                detalhes=f"{UsuarioSessao.nome} ajustou o valor do título #{id_titulo} para {formatar_moeda_br(novo_valor)}, "
+                         f"com base na quantidade realmente recebida no pedido de compra vinculado."
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao gerar log de ajuste de valor do título financeiro: {log_err}")
+
+        return True, None
+
+    except Exception as e:
+        print(f"❌ Erro ao ajustar valor do título financeiro no Supabase: {e}")
+        return False, str(e)
+
+
 def cancelar_titulo_financeiro(id_titulo, tipo):
     """Cancela um título pendente. Não apaga a linha — mantém o histórico para auditoria."""
     try:
