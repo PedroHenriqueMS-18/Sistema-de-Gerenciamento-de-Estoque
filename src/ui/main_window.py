@@ -7,6 +7,7 @@ from ui.components.list_users import ListUsers
 from ui.components.list_fornec import ListFornec
 from ui.components.financeiro import Financeiro
 from ui.components.pedidos_compra import PedidosCompra
+from ui.components.relatorios import Relatorios
 
 class MainWindow(ctk.CTk):
     def __init__(self, db_connection=None):
@@ -66,6 +67,16 @@ class MainWindow(ctk.CTk):
             )
             self.btn_financeiro.pack(pady=10, padx=20, fill="x")
 
+        # --- BOTÃO CONDICIONAL: RELATÓRIOS (Nível 1 e Nível 2, não Nível 3/vendedor) ---
+        self.btn_relatorios = None
+        if UsuarioSessao.nivel in (1, 2):
+            self.btn_relatorios = ctk.CTkButton(
+                self.sidebar,
+                text="📊 Relatórios",
+                command=self.mostrar_relatorios
+            )
+            self.btn_relatorios.pack(pady=10, padx=20, fill="x")
+
         # --- BOTÃO DE LOGOUT (Fixado no final da sidebar) ---
         self.btn_logout = ctk.CTkButton(
             self.sidebar, 
@@ -112,6 +123,8 @@ class MainWindow(ctk.CTk):
             buttons.append(self.btn_users)
         if self.btn_financeiro:
             buttons.append(self.btn_financeiro)
+        if self.btn_relatorios:
+            buttons.append(self.btn_relatorios)
 
         for btn in buttons:
             if btn == btn_clicked:
@@ -164,4 +177,10 @@ class MainWindow(ctk.CTk):
         self.clean_screen()
         self.select_aba(self.btn_compras)
         self.tela = PedidosCompra(master=self.area_principal)
+        self.tela.pack(fill="both", expand=True)
+
+    def mostrar_relatorios(self):
+        self.clean_screen()
+        self.select_aba(self.btn_relatorios)
+        self.tela = Relatorios(master=self.area_principal)
         self.tela.pack(fill="both", expand=True)
