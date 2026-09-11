@@ -9,6 +9,7 @@ from ui.components.modal_remocao_produto import ModalRemocaoProduto
 from ui.components.modal_cliente_cpf import ModalClienteCPF
 from ui.components.modal_sangria import ModalSangria
 from ui.components.modal_fechamento_caixa import ModalFechamentoCaixa
+from ui.components.modal_consulta_venda import ModalConsultaVenda
 from tkinter import messagebox
 from utils.pdv_service import (
     buscar_produto_por_ean,
@@ -53,6 +54,7 @@ class MainPDV(ctk.CTk):
             "F4": self.abrir_sangria,
             "F5": self.finalizar_venda,
             "F6": self.cancelar_venda_atual,
+            "F7": self.abrir_consulta_venda,
             "F12": self.abrir_fechamento_caixa
         }
         self.interface.create_shortcut_buttons(self.meus_atalhos)
@@ -181,6 +183,14 @@ class MainPDV(ctk.CTk):
 
         saldo_disponivel = calcular_saldo_caixa(self.id_caixa_atual, self.saldo_abertura)
         ModalSangria(master=self, saldo_disponivel=saldo_disponivel, ao_confirmar=self.processar_sangria)
+
+    def abrir_consulta_venda(self):
+        """Abre o modal de Consulta de Venda (F7), para consultar histórico e estornar vendas concluídas."""
+        if not self.caixa_aberto:
+            messagebox.showwarning("Atenção", "Abra o caixa antes de consultar vendas!")
+            return
+
+        ModalConsultaVenda(master=self)
 
     def processar_sangria(self, valor, motivo):
         """

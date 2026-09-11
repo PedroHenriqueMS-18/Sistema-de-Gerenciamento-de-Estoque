@@ -2,7 +2,7 @@ import os
 import sys
 import subprocess
 from datetime import datetime, timezone
-from utils.auth import supabase_client
+from utils.auth import supabase_client, UsuarioSessao
 from utils.logger import registrar_log
 
 
@@ -490,3 +490,105 @@ def gerar_comprovante_fechamento(id_caixa, operador_nome, data_abertura, resumo,
     except Exception as e:
         print(f"❌ Erro ao gerar comprovante de fechamento: {e}")
         return None
+
+
+def buscar_vendas(termo_busca="", status_filtro="TODAS"):
+    """
+    Lista vendas para a tela de Consulta de Venda (PDV, F7) — mais recentes primeiro,
+    sem filtro de data por padrão (traz todo o histórico). Nunca inclui status
+    'CANCELADA' (carrinho abandonado antes de pagar, sem itens/estoque envolvidos) —
+    só 'CONCLUIDA' e 'DEVOLVIDA', que são as duas únicas que representam uma venda
+    que de fato aconteceu. 'termo_busca' casa com o número da venda (se for dígito)
+    ou com o nome do operador.
+
+    Os nomes dos operadores são resolvidos numa consulta separada à tabela 'login'
+    (em vez do embed automático do Supabase) porque 'vendas.id_operador' não tem uma
+    FOREIGN KEY formal declarada no banco — o PostgREST não consegue montar o
+    relacionamento sozinho nesse caso.
+    """
+    try:
+        query = supabase_client.table("vendas")\
+            .select("id, valor_total, data_venda, hora_venda, status, id_forma_pagamento, id_operador")
+
+        if status_filtro in ("CONCLUIDA", "DEVOLVIDA"):
+            query = query.eq("status", status_filtro)
+        else:
+            query = query.in_("status", ["CONCLUIDA", "DEVOLVIDA"])
+
+        response = query.order("data_venda", desc=True).order("hora_venda", desc=True).execute()
+        dados = response.data or []
+
+        # Resolve os nomes dos operadores à parte, cruzando em Python
+        ids_operadores = list({d.get("id_operador") for d in dados if d.get("id_operador")})
+        mapa_nomes = {}
+        if ids_operadores:
+            operadores_resp = supabase_client.table("login").select("id, nome").in_("id", ids_operadores).execute()
+            mapa_nomes = {op["id"]: op["nome"] for op in (operadores_resp.data or [])}
+
+        if termo_busca:
+            termo = termo_busca.strip().lower()
+            if termo.isdigit():
+                dados = [d for d in dados if str(d.get("id")) == termo]
+            else:
+                dados = [d for d in dados if termo in mapa_nomes.get(d.get("id_operador"), "").lower()]
+
+        resultado = []
+        for item in dados:
+            nome_operador = mapa_nomes.get(item.get("id_operador"), "—")
+            resultado.append((
+                item.get("id"),
+                nome_operador,
+                float(item.get("valor_total", 0)),
+                item.get("data_venda"),
+                item.get("hora_venda"),
+                item.get("status"),
+                item.get("id_forma_pagamento")
+            ))
+        return resultado
+
+    except Exception as e:
+        print(f"❌ Erro ao buscar vendas no Supabase: {e}")
+        return []
+
+
+def estornar_venda(id_venda):
+    """
+    Estorna (devolve) uma venda CONCLUIDA: devolve a quantidade de cada item vendido
+    ao estoque e marca a venda como 'DEVOLVIDA'. A partir daí ela some automaticamente
+    de todos os cálculos que já filtram só status='CONCLUIDA' — dashboard, saldo da
+    gaveta (Sangria) e Total Geral Vendido (Fechamento) — sem precisar tocar em
+    nenhum desses módulos. Tudo ou nada: reverte a venda inteira, nunca um item isolado.
+    """
+    try:
+        venda_resp = supabase_client.table("vendas").select("status").eq("id", int(id_venda)).execute()
+
+        if not venda_resp.data:
+            return False, "Venda não encontrada."
+
+        if venda_resp.data[0].get("status") != "CONCLUIDA":
+            return False, "Só é possível estornar vendas com status CONCLUÍDA."
+
+        itens_resp = supabase_client.table("itens_venda").select("id_produto, quantidade").eq("id_venda", int(id_venda)).execute()
+
+        for item in (itens_resp.data or []):
+            produto_resp = supabase_client.table("produtos").select("quantidade").eq("id", item["id_produto"]).execute()
+            estoque_atual = produto_resp.data[0].get("quantidade", 0) if produto_resp.data else 0
+            supabase_client.table("produtos").update({"quantidade": estoque_atual + item["quantidade"]}).eq("id", item["id_produto"]).execute()
+
+        supabase_client.table("vendas").update({"status": "DEVOLVIDA"}).eq("id", int(id_venda)).execute()
+
+        try:
+            registrar_log(
+                acao="VENDA_DEVOLVIDA",
+                tabela="vendas",
+                registro_id=id_venda,
+                detalhes=f"{UsuarioSessao.nome} estornou a venda #{id_venda}, devolvendo os itens ao estoque."
+            )
+        except Exception as log_err:
+            print(f"⚠️ Erro ao gerar log de estorno de venda: {log_err}")
+
+        return True, None
+
+    except Exception as e:
+        print(f"❌ Erro ao estornar venda no Supabase: {e}")
+        return False, str(e)

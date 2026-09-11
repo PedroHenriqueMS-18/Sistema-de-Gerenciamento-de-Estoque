@@ -154,6 +154,7 @@ class TelaPDV(ctk.CTkFrame):
             ("F4\nSangria", self.accent_color, "F4"),
             ("F5\nFinalizar/NFC-e", self.success_color, "F5"),
             ("F6\nCancelar Venda", "#e74c3c", "F6"),
+            ("F7\nConsultar Venda", self.accent_color, "F7"),
             ("F12\nFechar Caixa", "#c0392b", "F12")
         ]
         
