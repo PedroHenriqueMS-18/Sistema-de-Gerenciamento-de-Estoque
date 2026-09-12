@@ -118,28 +118,49 @@ class Home(ctk.CTkFrame):
             # Formatamos o primeiro dia do mês atual (Ex: 2026-06-01)
             primeiro_dia_mes = datetime.now().strftime("%Y-%m-01")
 
-            # 🔧 CORREÇÃO 2: Montamos o grande JOIN trilateral do Supabase!
-            # 1. Pegamos a quantidade de 'itens_venda'
-            # 2. Fazemos o join com 'produtos' para buscar o (nome)
-            # 3. Fazemos o join com 'vendas' para buscar o (status, data_venda) para podermos filtrar!
-            response = supabase_client.table("itens_venda")\
-                .select("quantidade, produtos(nome), vendas(status, data_venda)")\
-                .gte("vendas.data_venda", primeiro_dia_mes)\
-                .eq("vendas.status", "CONCLUIDA")\
+            # Evitamos o embed automático do Supabase aqui: 'itens_venda.id_produto' não tem uma
+            # FOREIGN KEY formal declarada no banco, então o PostgREST não consegue montar esse
+            # join sozinho (mesmo problema que já resolvemos em outras telas). Fazemos em 3 passos
+            # separados e cruzamos os dados em Python.
+
+            # 1. Vendas concluídas dentro do mês
+            vendas_resp = supabase_client.table("vendas")\
+                .select("id")\
+                .gte("data_venda", primeiro_dia_mes)\
+                .eq("status", "CONCLUIDA")\
                 .execute()
 
-            if not response.data:
+            ids_vendas_validas = [v["id"] for v in (vendas_resp.data or [])]
+
+            if not ids_vendas_validas:
                 lbl_no_data = ctk.CTkLabel(self.chart_scroll_container, text="Nenhuma venda registrada este mês ainda.", font=("Arial", 14, "italic"), text_color="gray")
                 lbl_no_data.pack(pady=30)
                 return
 
+            # 2. Itens vendidos dentro dessas vendas
+            itens_resp = supabase_client.table("itens_venda")\
+                .select("id_produto, quantidade")\
+                .in_("id_venda", ids_vendas_validas)\
+                .execute()
+
+            itens = itens_resp.data or []
+
+            if not itens:
+                lbl_no_data = ctk.CTkLabel(self.chart_scroll_container, text="Nenhuma venda concluída este mês.", font=("Arial", 14, "italic"), text_color="gray")
+                lbl_no_data.pack(pady=30)
+                return
+
+            # 3. Nome de cada produto envolvido, resolvido à parte
+            ids_produtos = list({i["id_produto"] for i in itens if i.get("id_produto")})
+            mapa_nomes_produto = {}
+            if ids_produtos:
+                produtos_resp = supabase_client.table("produtos").select("id, nome").in_("id", ids_produtos).execute()
+                mapa_nomes_produto = {p["id"]: p["nome"] for p in (produtos_resp.data or [])}
+
             # Agrupa e consolida as quantidades por produto na memória do Python
             consolidado = {}
-            for item in response.data:
-                # Extrai o nome do produto vindo do Join de produtos
-                dados_prod = item.get("produtos", {})
-                nome = dados_prod.get("nome", "Desconhecido").upper() if dados_prod else "DESCONHECIDO"
-                
+            for item in itens:
+                nome = mapa_nomes_produto.get(item.get("id_produto"), "Desconhecido").upper()
                 qtd = float(item.get("quantidade", 0))
                 consolidado[nome] = consolidado.get(nome, 0) + qtd
 

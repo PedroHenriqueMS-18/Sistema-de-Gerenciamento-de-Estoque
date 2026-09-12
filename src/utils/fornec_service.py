@@ -101,7 +101,6 @@ def atualizar_fornecedor_db(dados):
         # 4. Registramos o Log de Auditoria na nuvem
         try:
             registrar_log(
-                cursor=None,
                 acao="ATUALIZAÇÃO FORNECEDOR",
                 tabela="fornecedores",
                 registro_id=dados['id'],
@@ -139,7 +138,6 @@ def cadastrar_fornecedor_db(dados):
 
         try:
             registrar_log(
-                cursor=None,
                 acao="CADASTRO FORNECEDOR",
                 tabela="fornecedores",
                 registro_id=novo_id,
@@ -161,7 +159,6 @@ def alterar_status_fornecedor_db(fornec_id, status):
         acao = "REATIVAÇÃO" if status else "INATIVAÇÃO"
         try:
             registrar_log(
-                cursor=None,
                 acao=acao,
                 tabela="fornecedores",
                 registro_id=fornec_id,

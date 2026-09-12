@@ -29,18 +29,18 @@ class MainWindow(ctk.CTk):
         ctk.CTkLabel(self.sidebar, text="🏢 SGE Manager", font=("Arial", 22, "bold")).pack(pady=30)
 
         # Botões de Navegação Padrão
-        self.btn_home = ctk.CTkButton(self.sidebar, text="Dashboard", command=self.show_home)
+        self.btn_home = ctk.CTkButton(self.sidebar, text="Dashboard", fg_color="#1f538d", hover_color="#14375e", command=self.show_home)
         self.btn_home.pack(pady=10, padx=20, fill="x")
 
-        self.btn_prod = ctk.CTkButton(self.sidebar, text="Estoque", command=self.mostrar_produtos)
+        self.btn_prod = ctk.CTkButton(self.sidebar, text="Estoque", fg_color="#1f538d", hover_color="#14375e", command=self.mostrar_produtos)
         self.btn_prod.pack(pady=10, padx=20, fill="x")
 
         # 🔧 CORREÇÃO 1: Guardando a referência correta do botão de fornecedores na instância (self.btn_fornec)
-        self.btn_fornec = ctk.CTkButton(self.sidebar, text="Fornecedores", command=self.mostrar_fornec)
+        self.btn_fornec = ctk.CTkButton(self.sidebar, text="Fornecedores", fg_color="#1f538d", hover_color="#14375e", command=self.mostrar_fornec)
         self.btn_fornec.pack(pady=10, padx=20, fill="x")
 
         # Visível pra Nível 1 e Nível 2 — igual Estoque/Fornecedores, sem restrição de nível
-        self.btn_compras = ctk.CTkButton(self.sidebar, text="📦 Pedidos de Compra", command=self.mostrar_compras)
+        self.btn_compras = ctk.CTkButton(self.sidebar, text="📦 Pedidos de Compra", fg_color="#1f538d", hover_color="#14375e", command=self.mostrar_compras)
         self.btn_compras.pack(pady=10, padx=20, fill="x")
 
         # --- BOTÃO CONDICIONAL: GESTÃO DE USUÁRIOS ---
@@ -73,6 +73,8 @@ class MainWindow(ctk.CTk):
             self.btn_relatorios = ctk.CTkButton(
                 self.sidebar,
                 text="📊 Relatórios",
+                fg_color="#1f538d",
+                hover_color="#14375e",
                 command=self.mostrar_relatorios
             )
             self.btn_relatorios.pack(pady=10, padx=20, fill="x")
@@ -117,7 +119,6 @@ class MainWindow(ctk.CTk):
 
     def select_aba(self, btn_clicked):
         """Gerencia visualmente as cores de ativação das abas laterais da Sidebar."""
-        # 🔧 CORREÇÃO 2: Unificando dinamicamente todos os botões no mapeamento de estado visual
         buttons = [self.btn_home, self.btn_prod, self.btn_fornec, self.btn_compras]
         if self.btn_users:
             buttons.append(self.btn_users)
@@ -128,14 +129,11 @@ class MainWindow(ctk.CTk):
 
         for btn in buttons:
             if btn == btn_clicked:
-                # Destaque com borda laranja para a aba selecionada
+                # Destaque com fundo escuro + borda laranja para a aba selecionada
                 btn.configure(fg_color="#333333", border_width=1, border_color="#f39c12", hover_color="#404040")
             else:
-                # Restaura a cor padrão de cada botão de forma isolada
-                if btn in (self.btn_users, self.btn_financeiro):
-                     btn.configure(fg_color="#1f538d", border_width=0, hover_color="#14375e")
-                else:
-                    btn.configure(fg_color="transparent", border_width=0, hover_color="#2b2b2b")
+                # Todos os botões voltam pro mesmo azul de descanso (agora consistente)
+                btn.configure(fg_color="#1f538d", border_width=0, hover_color="#14375e")
 
     def clean_screen(self):
         """Limpa a área central eliminando resíduos de memória dos widgets anteriores."""

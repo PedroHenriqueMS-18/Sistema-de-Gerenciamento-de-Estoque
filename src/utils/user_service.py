@@ -96,7 +96,6 @@ def atualizar_usuario_db(dados):
 
         try:
             registrar_log(
-                cursor=None,
                 acao="ALTERAÇÃO DE PERFIL",
                 tabela="login",
                 registro_id=id_usuario_alvo,
@@ -117,7 +116,6 @@ def inativar_usuario_db(usuario_id):
         
         try:
             registrar_log(
-                cursor=None,
                 acao="INATIVAÇÃO",
                 tabela="login", # 🐛 Corrigido: era 'produtos' no seu código original
                 registro_id=usuario_id,
@@ -137,7 +135,6 @@ def reativar_usuario_db(usuario_id):
         
         try:
             registrar_log(
-                cursor=None,
                 acao="REATIVAÇÃO",
                 tabela="login", # 🐛 Corrigido: era 'produtos' no seu código original
                 registro_id=usuario_id,
@@ -179,7 +176,6 @@ def cadastrar_usuario_db(dados):
 
         try:
             registrar_log(
-                cursor=None,
                 acao="CADASTRO USUÁRIO",
                 tabela="login",
                 registro_id=novo_usuario_id,

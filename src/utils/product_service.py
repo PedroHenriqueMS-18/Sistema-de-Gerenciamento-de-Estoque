@@ -94,7 +94,6 @@ def inativar_produto_db(id_produto):
             
             try:
                 registrar_log(
-                    cursor=None,
                     acao="INATIVAÇÃO",
                     tabela="produtos",
                     registro_id=id_produto,
@@ -122,7 +121,6 @@ def reativar_produto_bd(id_produto):
             print(f"✅ Produto {id_produto} reativado com sucesso.")
             try:
                 registrar_log(
-                    cursor=None,
                     acao="REATIVAÇÃO",
                     tabela="produtos",
                     registro_id=id_produto,
@@ -197,7 +195,6 @@ def atualizar_produto_db(novos_dados):
                 detalhes_finais = " | ".join(mudancas) if mudancas else "Nenhuma alteração de valor realizada."
 
                 registrar_log(
-                    cursor=None,
                     acao="ATUALIZAÇÃO",
                     tabela="produtos",
                     registro_id=p_id,

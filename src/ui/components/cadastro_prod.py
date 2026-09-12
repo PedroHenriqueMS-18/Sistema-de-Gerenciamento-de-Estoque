@@ -134,7 +134,6 @@ class PopUpCadastro(ctk.CTkToplevel):
 
             try:
                 registrar_log(
-                    cursor=None,
                     acao="CADASTRO",
                     tabela="produtos",
                     registro_id=novo_id,
